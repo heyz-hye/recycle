@@ -11,6 +11,7 @@ async function selectTicketCenter(page: Page) {
   await page.locator(".address-results button").click();
   await page
     .getByRole("button", { name: "Use for my ticket", exact: true })
+    .and(page.locator(":enabled"))
     .click();
 }
 test.beforeEach(async ({ page }) => {

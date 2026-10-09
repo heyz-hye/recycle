@@ -144,7 +144,15 @@ test("Google discovery works with no registered centers and excludes unavailable
   );
   await expect(
     page.getByRole("button", { name: "Use for my ticket" }),
-  ).toHaveCount(0);
+  ).toHaveCount(2);
+  for (const button of await page
+    .getByRole("button", { name: "Use for my ticket" })
+    .all()) {
+    await expect(button).toBeDisabled();
+    await expect(button).toHaveAccessibleDescription(
+      /center setup is required/,
+    );
+  }
   await expect(
     page.getByRole("button", { name: "Create drop-off ticket" }),
   ).toBeDisabled();
@@ -186,10 +194,11 @@ test("only an exact registered Google Place ID enables a ticket", async ({
       .locator(".google-place-list li")
       .first()
       .getByRole("button", { name: /ticket/ }),
-  ).toHaveCount(0);
+  ).toBeDisabled();
   await page
     .locator(".google-place-list")
     .getByRole("button", { name: "Use for my ticket" })
+    .and(page.locator(":enabled"))
     .click();
   await page.getByLabel("Dry cardboard", { exact: true }).fill("1");
   const request = page.waitForRequest(

@@ -104,13 +104,16 @@ test("explicit Google selection binds the ticket, and clearing location clears t
     .getByRole("button", { name: "Use my location", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Use for my ticket", exact: true }),
+    page
+      .getByRole("button", { name: "Use for my ticket", exact: true })
+      .and(page.locator(":enabled")),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Create drop-off ticket" }),
   ).toBeDisabled();
   await page
     .getByRole("button", { name: "Use for my ticket", exact: true })
+    .and(page.locator(":enabled"))
     .click();
   await expect(page.locator(".selected-center")).toContainText(
     "Registered recycling center",

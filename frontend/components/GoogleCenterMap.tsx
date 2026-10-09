@@ -373,10 +373,13 @@ export default function GoogleCenterMap({
                     {formatDistance(place.distance)}
                     {index === 0 ? " · Closest result" : ""}
                   </strong>
-                  <p className="small muted">
+                  <p
+                    className="small muted"
+                    id={`ticket-availability-${place.id}`}
+                  >
                     {enrolled
                       ? "LoopMint participating center"
-                      : "Not enrolled in LoopMint — tickets unavailable here."}
+                      : "Not enrolled in LoopMint — center setup is required before tickets can be created."}
                   </p>
                   <div className="button-row">
                     <a
@@ -387,18 +390,17 @@ export default function GoogleCenterMap({
                     >
                       Directions <ExternalLink size={13} />
                     </a>
-                    {enrolled && (
-                      <button
-                        type="button"
-                        className="button secondary small-button"
-                        disabled={disabled}
-                        onClick={() => onSelect(enrolled.id)}
-                      >
-                        {selected === enrolled.id
-                          ? "Selected for ticket"
-                          : "Use for my ticket"}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="button secondary small-button"
+                      disabled={disabled || !enrolled}
+                      aria-describedby={`ticket-availability-${place.id}`}
+                      onClick={() => enrolled && onSelect(enrolled.id)}
+                    >
+                      {enrolled && selected === enrolled.id
+                        ? "Selected for ticket"
+                        : "Use for my ticket"}
+                    </button>
                   </div>
                   {place.attributions.map((a, i) => (
                     <small key={i} className="google-attribution">
