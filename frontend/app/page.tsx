@@ -52,6 +52,7 @@ import {
   User,
   Claim,
   WalletData,
+  RecyclingTotals,
   Impact,
   Funding,
   Center,
@@ -157,6 +158,7 @@ export default function Home() {
   const [mobileNav, setMobileNav] = useState(false);
   const [ticket, setTicket] = useState<Claim | null>(null);
   const [share, setShare] = useState<Claim | null>(null);
+  const [shareTotals, setShareTotals] = useState<RecyclingTotals | null>(null);
   const [selected, setSelected] = useState<Claim | null>(null);
   const [showConnect, setShowConnect] = useState(false);
   const [showRedeem, setShowRedeem] = useState(false);
@@ -255,6 +257,7 @@ export default function Home() {
     setTicket(null);
     setSelected(null);
     setShare(null);
+    setShareTotals(null);
     setShowRedeem(false);
   }
   async function demoLogin(account: string) {
@@ -268,22 +271,9 @@ export default function Home() {
     setError("");
   }
   const accepted = claims.filter((c) => c.status === "verified");
-  const myBottleCount = accepted.reduce(
-    (n, c) =>
-      n +
-      c.items
-        .filter((i) => i.material === "bottles")
-        .reduce((a, i) => a + (i.accepted_quantity || 0), 0),
-    0,
-  );
-  const myCardboard = accepted.reduce(
-    (n, c) =>
-      n +
-      c.items
-        .filter((i) => i.material === "cardboard")
-        .reduce((a, i) => a + (i.accepted_quantity || 0), 0),
-    0,
-  );
+  const totals = wallet?.totals;
+  const myBottleCount = totals?.bottles || 0;
+  const myCardboard = totals?.cardboard_grams || 0;
   const prompt = accepted.find(
     (c) => canShareReward(c) && !dismissed.includes(c.id),
   );
@@ -725,11 +715,7 @@ export default function Home() {
               <section className="stats-grid">
                 <Stat
                   label="Your confirmed rewards"
-                  value={tokens(
-                    wallet?.rewards
-                      .filter((r) => r.state === "confirmed")
-                      .reduce((n, r) => n + r.amount_base_units, 0) || 0,
-                  )}
+                  value={tokens(totals?.reward_base_units || 0)}
                   unit="LOOP"
                   icon={<CircleDollarSign size={19} />}
                   note="Earned from center-confirmed intake"
@@ -749,6 +735,30 @@ export default function Home() {
                   note="Measured and confirmed by your center"
                 />
               </section>
+              {user.role === "recycler" && (
+                <div className="total-impact-share">
+                  <div>
+                    <strong>Your impact, all together.</strong>
+                    <p className="small muted">
+                      Share your lifetime recycling and total LOOP earned.
+                    </p>
+                  </div>
+                  <button
+                    className="button secondary"
+                    disabled={
+                      !totals || (myBottleCount === 0 && myCardboard === 0)
+                    }
+                    onClick={() => totals && setShareTotals({ ...totals })}
+                  >
+                    <Share2 size={16} /> Share total impact
+                  </button>
+                  {totals && myBottleCount === 0 && myCardboard === 0 && (
+                    <p className="small muted">
+                      Available after your first center-confirmed drop-off.
+                    </p>
+                  )}
+                </div>
+              )}
               {user.role === "recycler" && prompt && (
                 <div className="share-prompt">
                   <span className="check-disc">
@@ -1252,6 +1262,14 @@ export default function Home() {
             setDismissed([...dismissed, share.id]);
             setShare(null);
           }}
+        />
+      )}
+      {shareTotals && user.role === "recycler" && (
+        <Share
+          key="total-impact"
+          totals={shareTotals}
+          demo={demo}
+          onClose={() => setShareTotals(null)}
         />
       )}
       {selected && (

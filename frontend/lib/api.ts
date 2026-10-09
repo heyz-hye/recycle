@@ -50,7 +50,13 @@ export type Redemption = {
   transaction_b64: string | null;
   created_at: number;
 };
+export type RecyclingTotals = {
+  bottles: number;
+  cardboard_grams: number;
+  reward_base_units: number;
+};
 export type WalletData = {
+  totals: RecyclingTotals;
   balance_base_units: number;
   pending_base_units: number;
   rewards: Reward[];

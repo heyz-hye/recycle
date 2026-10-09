@@ -115,8 +115,8 @@ test("complete center-confirmed reward and external sharing flow", async ({
   ).toBeVisible();
   await expect(dialog.getByLabel("Your caption")).toHaveValue(/2 kg cardboard/);
   await expect(dialog.getByLabel("Your caption")).toHaveValue(/40 LOOP/);
-  await expect(dialog.getByLabel("Your caption")).toHaveValue(
-    /no real monetary value/,
+  await expect(dialog.getByLabel("Your caption")).not.toHaveValue(
+    /simulated|demo|devnet|monetary value/i,
   );
   expect(await dialog.getByLabel("Your caption").inputValue()).not.toContain(
     ticket,

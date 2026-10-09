@@ -48,6 +48,89 @@ async function signIn(page: Page) {
   await expect(page.locator(".topbar")).toBeVisible();
 }
 
+test("dashboard shares lifetime totals independently of ticket prompts and wallet balance", async ({
+  page,
+}, info) => {
+  await page.route("**/api/claims", (r) =>
+    r.fulfill({ json: [first, second] }),
+  );
+  await page.route("**/api/wallet", (r) =>
+    r.fulfill({
+      json: {
+        balance_base_units: 1000,
+        pending_base_units: 9000,
+        rewards: [first.reward, second.reward],
+        redemptions: [],
+        totals: {
+          bottles: 210,
+          cardboard_grams: 131250,
+          reward_base_units: 364000,
+        },
+      },
+    }),
+  );
+  await signIn(page);
+  await expect(page.locator(".stats-grid")).toContainText("3,640");
+  await expect(page.locator(".stats-grid")).toContainText("131.25");
+  const button = page.getByRole("button", {
+    name: "Share total impact",
+    exact: true,
+  });
+  await expect(button).toBeEnabled();
+  await button.click();
+  const dialog = page.getByRole("dialog", {
+    name: "Share your total impact",
+    exact: true,
+  });
+  const caption =
+    "So far, I've recycled 210 bottles and 131.25 kg cardboard and earned 3,640 LOOP! Every drop-off adds up. #LoopMint #Recycling";
+  await expect(dialog.getByLabel("Your caption")).toHaveValue(caption);
+  for (const platform of ["X", "Reddit"]) {
+    const url = new URL(
+      (await dialog
+        .getByRole("link", { name: `Share on ${platform}`, exact: true })
+        .getAttribute("href"))!,
+    );
+    expect(url.searchParams.get("text")).toBe(caption);
+  }
+  await dialog.getByLabel("Your caption").fill("My edited total impact");
+  await dialog
+    .getByRole("button", { name: "Reset to standard template" })
+    .click();
+  await expect(dialog.getByLabel("Your caption")).toHaveValue(caption);
+  const download = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Download card" }).click();
+  expect((await download).suggestedFilename()).toBe("my-recycling-impact.png");
+  await page.screenshot({ path: info.outputPath("total-impact-share.png") });
+  await dialog.getByRole("button", { name: "Not now" }).click();
+  await expect(page.locator(".share-prompt")).toContainText("35 LOOP");
+  await expect(button).toBeEnabled();
+});
+
+test("empty dashboard explains when total sharing becomes available", async ({
+  page,
+}) => {
+  await page.route("**/api/claims", (r) => r.fulfill({ json: [] }));
+  await page.route("**/api/wallet", (r) =>
+    r.fulfill({
+      json: {
+        balance_base_units: 0,
+        pending_base_units: 0,
+        rewards: [],
+        redemptions: [],
+        totals: { bottles: 0, cardboard_grams: 0, reward_base_units: 0 },
+      },
+    }),
+  );
+  await signIn(page);
+  await expect(
+    page.getByRole("button", { name: "Share total impact", exact: true }),
+  ).toBeDisabled();
+  await expect(page.locator(".total-impact-share")).toContainText(
+    "Available after your first center-confirmed drop-off.",
+  );
+});
+
 test("each rewarded ticket offers a standard post and safe X/Reddit composer links", async ({
   page,
   context,

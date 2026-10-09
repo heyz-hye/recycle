@@ -57,7 +57,18 @@ def impact(user=Depends(current_user)):
 @router.get("/wallet")
 def wallet(user=Depends(current_user)):
     with transaction(write=False) as c:
+        totals = c.one(
+            "SELECT COALESCE(SUM(CASE WHEN i.material='bottles' THEN i.accepted_quantity ELSE 0 END),0) AS bottles, "
+            "COALESCE(SUM(CASE WHEN i.material='cardboard' THEN i.accepted_quantity ELSE 0 END),0) AS cardboard_grams "
+            "FROM claim_items i JOIN claims c ON c.id=i.claim_id WHERE c.user_id=? AND c.status='verified'",
+            (user["id"],),
+        )
+        totals["reward_base_units"] = c.one(
+            "SELECT COALESCE(SUM(amount_base_units),0) AS n FROM rewards WHERE user_id=? AND state='confirmed'",
+            (user["id"],),
+        )["n"]
         return {
+            "totals": totals,
             "balance_base_units": redemptions.balance(c, user["id"]),
             "pending_base_units": c.one(
                 "SELECT COALESCE(SUM(amount_base_units),0) AS n FROM rewards WHERE user_id=? AND state!='confirmed'",

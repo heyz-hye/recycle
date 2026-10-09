@@ -1,5 +1,7 @@
 # Sharing a rewarded ticket
 
+The dashboard's **Share total impact** button creates an editable post and PNG with the recycler's lifetime accepted bottles, cardboard weight, and total confirmed LOOP earned. It uses account-scoped database totals across all tickets, including those beyond the recent 100-ticket list. Pending rewards are excluded from earned LOOP, and redemptions do not reduce lifetime earnings. These totals also drive the dashboard cards. The button becomes available after the first center-confirmed intake. Closing this preview does not dismiss any individual ticket's share prompt. X, Reddit, copy, and download work the same way as for individual tickets.
+
 After a ticket is verified **and** its reward reaches `confirmed`, the recycler sees a share prompt and a **Share** button on that ticket's activity row. Dismissing one prompt allows the next rewarded ticket's prompt to appear. The row action remains available afterward. Pending, unfunded, rejected, and unconfirmed rewards do not offer a received-token post.
 
 The editable standard caption and downloadable PNG use only center-accepted quantities and that ticket's confirmed reward amount. They exclude the submitted estimate, ticket code, account/wallet identity, private staff notes, and transaction signature. The caption focuses on the recycled materials and LOOP received, without simulated-token wording. The PNG retains its demo-token label. **Reset to standard template** restores the generated caption.

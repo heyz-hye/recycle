@@ -1,4 +1,20 @@
-import { Claim, quantity, tokens } from "./api";
+import { Claim, RecyclingTotals, quantity, tokens, number } from "./api";
+
+export function totalShareTitle(totals: RecyclingTotals) {
+  const recycled = [
+    totals.bottles > 0 ? `${number(totals.bottles)} bottles` : "",
+    totals.cardboard_grams > 0
+      ? `${number(totals.cardboard_grams / 1000)} kg cardboard`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" and ");
+  return `So far, I've recycled ${recycled || "0 bottles and 0 kg cardboard"} and earned ${tokens(totals.reward_base_units)} LOOP`;
+}
+
+export function totalShareCaption(totals: RecyclingTotals) {
+  return `${totalShareTitle(totals)}! Every drop-off adds up. #LoopMint #Recycling`;
+}
 
 export function canShareReward(claim: Claim) {
   return claim.status === "verified" && claim.reward?.state === "confirmed";

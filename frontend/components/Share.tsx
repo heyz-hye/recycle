@@ -1,31 +1,59 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Copy, Download, Share2, Check, ExternalLink } from "lucide-react";
-import { Claim, quantity, tokens } from "@/lib/api";
+import { Claim, RecyclingTotals, quantity, tokens } from "@/lib/api";
 import {
   canShareReward,
   shareCaption,
   shareTitle,
   socialComposeLinks,
+  totalShareTitle,
+  totalShareCaption,
 } from "@/lib/sharing";
 import Modal from "./Modal";
 const disclaimer = "Solana Devnet demo tokens - no real monetary value.";
 export default function Share({
   claim,
+  totals,
   demo,
   onClose,
 }: {
-  claim: Claim;
   demo: boolean;
   onClose: () => void;
-}) {
-  const items = claim.items.filter((i) => (i.accepted_quantity || 0) > 0);
-  const received = canShareReward(claim);
+} & (
+  | { claim: Claim; totals?: never }
+  | { totals: RecyclingTotals; claim?: never }
+)) {
+  const items = totals
+    ? [
+        {
+          material: "bottles" as const,
+          submitted_quantity: 0,
+          accepted_quantity: totals.bottles,
+        },
+        {
+          material: "cardboard" as const,
+          submitted_quantity: 0,
+          accepted_quantity: totals.cardboard_grams,
+        },
+      ].filter((i) => i.accepted_quantity > 0)
+    : claim.items.filter((i) => (i.accepted_quantity || 0) > 0);
+  const received = totals ? items.length > 0 : canShareReward(claim);
+  const rewardAmount = totals
+    ? totals.reward_base_units
+    : claim.reward?.amount_base_units || 0;
+  const standardCaption = totals
+    ? totalShareCaption(totals)
+    : shareCaption(claim);
+  const title = totals ? "Share your total impact" : "Share your impact";
   const label = demo
     ? "Simulated demo tokens - no real monetary value."
     : disclaimer;
-  const [caption, setCaption] = useState(() => shareCaption(claim));
-  const links = socialComposeLinks(shareTitle(claim), caption);
+  const [caption, setCaption] = useState(standardCaption);
+  const links = socialComposeLinks(
+    totals ? totalShareTitle(totals) : shareTitle(claim),
+    caption,
+  );
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -46,7 +74,13 @@ export default function Share({
     c.fillText("↻  loopmint", 80, 100);
     c.fillStyle = "#c2d5cb";
     c.font = "22px sans-serif";
-    c.fillText("CENTER-CONFIRMED RECYCLING INTAKE", 80, 240);
+    c.fillText(
+      totals
+        ? "MY TOTAL RECYCLING IMPACT"
+        : "CENTER-CONFIRMED RECYCLING INTAKE",
+      80,
+      240,
+    );
     c.fillStyle = "#ffffff";
     c.font = "bold 76px sans-serif";
     c.fillText("A little action.", 80, 350);
@@ -57,7 +91,7 @@ export default function Share({
       c.fillStyle = "#c7ed8b";
       c.font = "bold 42px sans-serif";
       c.fillText(
-        `${tokens(claim.reward!.amount_base_units)} LOOP received`,
+        `${tokens(rewardAmount)} LOOP ${totals ? "earned in total" : "received"}`,
         80,
         810,
       );
@@ -67,7 +101,7 @@ export default function Share({
     c.fillStyle = "#a9c4b6";
     c.font = "24px sans-serif";
     c.fillText("Small steps. Full circle.  #LoopMint", 80, 987);
-  }, [claim, demo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [claim, totals, demo]); // eslint-disable-line react-hooks/exhaustive-deps
   const blob = () =>
     new Promise<Blob>((resolve, reject) =>
       canvas.current?.toBlob(
@@ -101,10 +135,13 @@ export default function Share({
       </Modal>
     );
   return (
-    <Modal title="Share your impact" onClose={onClose} wide>
+    <Modal title={title} onClose={onClose} wide>
       <p className="muted modal-intro">
-        Your reward has arrived. Edit your post, then review and publish it from
-        your own X or Reddit account.
+        {totals
+          ? "Celebrate everything you’ve recycled and all the LOOP you’ve earned. "
+          : "Your reward has arrived. "}
+        Edit your post, then review and publish it from your own X or Reddit
+        account.
       </p>
       <div className="share-grid">
         <canvas
@@ -129,7 +166,7 @@ export default function Share({
           <button
             type="button"
             className="text-button"
-            onClick={() => setCaption(shareCaption(claim))}
+            onClick={() => setCaption(standardCaption)}
           >
             Reset to standard template
           </button>

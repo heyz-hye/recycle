@@ -602,6 +602,17 @@ input[type="checkbox"] {
 .stats-grid.four {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
+.total-impact-share {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 25px;
+}
+.total-impact-share p {
+  margin: 5px 0 0;
+}
 .stat-card {
   border: 1px solid var(--line);
   border-radius: 10px;
