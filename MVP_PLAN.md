@@ -8,7 +8,8 @@ Users bring recyclable materials to a participating center. Authorized center st
 
 **Verification policy:** no Gemini integration, AI photo analysis, AI approval, or AI fallback. Center confirmation is the authoritative record of accepted recycling intake. A user submission, photo, or QR scan alone cannot authorize rewards.
 
-- Mobile-friendly website; plastic bottles and dry cardboard; one participating center initially.
+- Mobile-friendly website; plastic bottles and dry cardboard; registered participating centers with assigned staff.
+- Opt-in browser GPS selects the nearest registered center by approximate straight-line distance. Keep manual search and selection available. Store center coordinates, never recycler coordinates; generate each ticket for the selected center. Demo locations must be labeled as samples.
 - Three roles: recycler, center verifier, and funding partner. Roles and center assignments are server-controlled.
 - Wallet login, username, claim submission, unique short-lived QR ticket, and center review.
 - Submission records selected center, material, and estimated quantity. A photo may be kept as optional supporting evidence; it is never required for automated analysis.
@@ -94,7 +95,7 @@ There is no Gemini client, AI schema, AI dependency, AI API key, or AI service i
 
 ### Records and analytics
 
-- `users`, `centers`: wallet, username, roles, center assignment, and acceptance policies.
+- `users`, `centers`, `center_locations`: wallet, username, roles, center assignment, acceptance policies, and operator-maintained center coordinates with a demo marker.
 - `claims`, `claim_items`, `verifications`: ticket identity and expiry, optional evidence, submitted and accepted quantities, center, verifier, receipt timestamp, decision, and rejection reason.
 - `reward_rules`: material, unit, rate, effective dates, and immutable rate snapshot on approval.
 - `funding_ledger`: received funds, reservations, releases, and simulated payouts.
@@ -119,6 +120,7 @@ Use ordinary PostgreSQL tables for authoritative state, funding, and unique cons
 - Rejected claim: no reward issuance or funding reservation.
 - Invalid confirmation: reject negative quantities, wrong units, unsupported materials, or a confirmation with no accepted quantity.
 - Unauthorized verifier: reject recycler approval, another center's verifier, or self-approval without changing claim, funding, or reward records.
+- Center discovery: request GPS only on click; rank geocoded centers accurately; bind the ticket to the selected center; retain manual selection after denial, timeout, or unavailable coordinates. Do not send or persist recycler coordinates. Manual selection must override a pending GPS request.
 - Duplicate or concurrent confirmation: one reward entitlement, one funding reservation, and one issuance job per claim.
 - Ticket reuse or expiry: no new approval from an already consumed or expired ticket; provide a controlled replacement process for an unverified claim.
 - Insufficient funding: retain verified intake, mark the reward awaiting funding, and send no tokens until funding is reserved.
@@ -137,4 +139,4 @@ Suggested ownership: backend handles permissions, confirmation, SQL, rewards, an
 
 Retained demo tracks: sustainability through verified intake and participation; Solana through confirmed Devnet rewards; Tiger Data through event analytics; GoDaddy Registry through an eligible connected domain. Domain candidate: loopmint.club, with availability and event eligibility still unchecked. Remove Google Gemini from the sponsor track plan.
 
-Keep native mobile apps, real government integrations, bank payouts, token trading, IoT bins, custom smart contracts, direct messaging, a general chatbot, hosted posts/feeds, and automatic social publishing outside the initial build. Add maps, challenges, and leaderboards later. If time is tight, preserve submission, center confirmation, one funded and confirmed reward, a copyable post template with a downloadable card, and a small impact dashboard.
+Keep native mobile apps, real government integrations, bank payouts, token trading, IoT bins, custom smart contracts, direct messaging, a general chatbot, hosted posts/feeds, and automatic social publishing outside the initial build. GPS discovery and destination directions are included; embedded maps, challenges, and leaderboards remain later work. If time is tight, preserve submission, center confirmation, one funded and confirmed reward, a copyable post template with a downloadable card, and a small impact dashboard.

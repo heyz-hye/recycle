@@ -79,7 +79,17 @@ class WalletLogin(StrictModel):
 
 
 class DemoLogin(StrictModel):
-    account: Literal["recycler", "verifier", "partner"]
+    account: Literal[
+        "recycler", "verifier", "partner", "verifier-williamsburg", "verifier-downtown"
+    ]
+
+
+class CenterConfiguration(StrictModel):
+    id: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9_-]+$")
+    name: str = Field(min_length=1, max_length=150)
+    address: str = Field(min_length=1, max_length=300)
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
 
 
 class RedemptionConfirm(StrictModel):

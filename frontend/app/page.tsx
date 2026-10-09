@@ -67,6 +67,7 @@ import { wallets, loginWallet, signBurn } from "@/lib/wallet";
 import Modal from "@/components/Modal";
 import Share from "@/components/Share";
 import Scanner from "@/components/Scanner";
+import CenterPicker from "@/components/CenterPicker";
 
 type Page = "overview" | "dropoff" | "wallet" | "impact" | "review" | "funding";
 const names: Record<Page, string> = {
@@ -593,7 +594,13 @@ export default function Home() {
                   onChange={(e) => demoLogin(e.target.value)}
                 >
                   <option value="recycler">Recycler</option>
-                  <option value="verifier">Center staff</option>
+                  <option value="verifier">Center staff · Greenpoint</option>
+                  <option value="verifier-williamsburg">
+                    Center staff · Williamsburg
+                  </option>
+                  <option value="verifier-downtown">
+                    Center staff · Downtown
+                  </option>
                   <option value="partner">Funding partner</option>
                 </select>
               </label>
@@ -1304,6 +1311,9 @@ function Dropoff({
   const [bottles, setBottles] = useState("");
   const [cardboard, setCardboard] = useState("");
   const [center, setCenter] = useState("greenpoint");
+  const [locating, setLocating] = useState(false);
+  const selectedCenter =
+    centers.find((c) => c.id === center)?.id || centers[0]?.id || "";
   const [error, setError] = useState("");
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -1325,7 +1335,11 @@ function Dropoff({
       return;
     }
     setError("");
-    onSubmit({ center_id: center, items });
+    if (!selectedCenter || locating) {
+      setError("Choose a center or wait for the location search to finish.");
+      return;
+    }
+    onSubmit({ center_id: selectedCenter, items });
   }
   return (
     <div className="form-grid">
@@ -1383,22 +1397,13 @@ function Dropoff({
             <span>kg</span>
           </div>
         </div>
-        <label htmlFor="center">Your recycling center</label>
-        <select
-          id="center"
-          value={center}
-          onChange={(e) => setCenter(e.target.value)}
-          required
-        >
-          {centers.map((c) => (
-            <option value={c.id} key={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <p className="small muted">
-          <MapPin size={14} /> {centers.find((c) => c.id === center)?.address}
-        </p>
+        <CenterPicker
+          centers={centers}
+          value={selectedCenter}
+          onChange={setCenter}
+          disabled={busy}
+          onLocatingChange={setLocating}
+        />
         <div className="estimate">
           <span>Estimated reward</span>
           <strong>
@@ -1417,7 +1422,7 @@ function Dropoff({
         )}
         <button
           className="button primary full"
-          disabled={busy || !centers.length}
+          disabled={busy || !selectedCenter || locating}
           type="submit"
         >
           {busy ? "Creating your ticket…" : "Create drop-off ticket"}
