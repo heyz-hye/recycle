@@ -1341,10 +1341,10 @@ function Dropoff({
 }) {
   const [bottles, setBottles] = useState("");
   const [cardboard, setCardboard] = useState("");
-  const [center, setCenter] = useState("greenpoint");
+  const [center, setCenter] = useState("");
   const [locating, setLocating] = useState(false);
   const selectedCenter =
-    centers.find((c) => c.id === center)?.id || centers[0]?.id || "";
+    centers.find((c) => c.id === center && !c.is_demo)?.id || "";
   const [error, setError] = useState("");
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -1367,7 +1367,7 @@ function Dropoff({
     }
     setError("");
     if (!selectedCenter || locating) {
-      setError("Choose a center or wait for the location search to finish.");
+      setError("Choose a participating center from the map results.");
       return;
     }
     onSubmit({ center_id: selectedCenter, items });

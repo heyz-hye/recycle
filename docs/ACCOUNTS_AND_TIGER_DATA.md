@@ -91,13 +91,9 @@ The generated passwords are unique and stored only in `.data/test-role-logins.js
 | `worker.riverside@loopmint.example` | Worker assigned only to `test-riverside` |
 | `fund.manager@loopmint.example` | Government fund manager; fictional agency and Environmental Services department |
 
-Sign in at `http://localhost:3000` using the normal email/password form. Use separate browser profiles or sign out between roles:
+Sign in at `http://localhost:3000` using the normal email/password form. Use separate browser profiles or sign out between roles. Check each worker’s assigned site in **My account** and the manager’s agency, department, and job title. The manager can add simulated funding from **Funding**.
 
-1. Recycler: create a ticket for **TEST ONLY — Greenhill Recycling Center** and copy its ticket code. No reward exists yet.
-2. Riverside worker: the Greenhill ticket is absent from the queue, and entering its code is denied.
-3. Greenhill worker: open that ticket, confirm physical receipt and accepted quantities. A reward is queued if the simulated budget has funds, or waits for funding otherwise. Confirmation records this worker's individual ID. Repeating confirmation cannot create another reward.
-4. Government fund manager: inspect **My account** for agency, department, and job title; open **Funding** and add simulated funding. Already-confirmed rewards waiting for funding become eligible for processing. Recycling confirmation is denied for this login.
-5. Recycler: refresh the wallet after the demo worker processes the reward. Funding alone never creates a reward without a site's confirmation.
+The fictional sites are not listed in the drop-off picker. The picker now requires an explicit selection from the Google map/results, and no longer automatically assigns a test center. Use the isolated API scenarios below to generate tickets for both fictional sites and exercise confirmation and funding. For manual end-to-end testing with a real enrolled center, configure its verified map location/Place ID and provision its assigned worker.
 
 Automated API scenarios in `backend/tests/test_role_scenarios.py` run against isolated databases and cover both directions of cross-site read/open/approve/reject denial, individual audit IDs, manager permission boundaries, duplicate funding, and reward issuance. For browser login checks, provision the same fixtures in an isolated database and pass its credential-file path through `E2E_ROLE_CREDENTIALS` when running `frontend/tests/role-logins.spec.ts`. Never run the full browser suite against your live Tiger Data database.
 

@@ -1,4 +1,32 @@
 import { test, expect, Page } from "@playwright/test";
+import { mockGoogleMaps } from "./helpers/google-maps";
+
+async function selectTicketCenter(page: Page) {
+  await page
+    .getByLabel("Or search by address, neighborhood, or postal code")
+    .fill("Greenpoint, Brooklyn");
+  await page
+    .getByRole("button", { name: "Search location", exact: true })
+    .click();
+  await page.locator(".address-results button").click();
+  await page
+    .getByRole("button", { name: "Use for my ticket", exact: true })
+    .click();
+}
+test.beforeEach(async ({ page }) => {
+  await mockGoogleMaps(page, [
+    {
+      id: "greenpoint",
+      name: "Greenpoint Recycling Center",
+      address: "Test listing",
+      latitude: 40.7405,
+      longitude: -73.9544,
+      is_demo: 0,
+      google_place_id: "enrolled",
+    },
+  ]);
+});
+
 async function nav(page: Page, name: string) {
   await expect(page.locator(".topbar")).toBeVisible();
   const menu = page.getByRole("button", { name: "Open navigation" });
@@ -27,6 +55,7 @@ test("complete center-confirmed reward and external sharing flow", async ({
       .getByRole("button", { name: "Center workspace" }),
   ).toHaveCount(0);
   await nav(page, "New drop-off");
+  await selectTicketCenter(page);
   await page.getByLabel("Dry cardboard", { exact: true }).fill("2");
   await page.getByRole("button", { name: "Create drop-off ticket" }).click();
   const dialog = page.getByRole("dialog");
@@ -213,6 +242,7 @@ test("ticket scan has manual fallback and rejection does not reward", async ({
   await page.goto("/");
   await page.getByRole("button", { name: "Try the recycler demo" }).click();
   await nav(page, "New drop-off");
+  await selectTicketCenter(page);
   await page.getByLabel("Plastic bottles", { exact: true }).fill("3");
   await page.getByRole("button", { name: "Create drop-off ticket" }).click();
   const dialog = page.getByRole("dialog");

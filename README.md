@@ -10,10 +10,10 @@ A recycling rewards MVP with a Next.js interface and Python/FastAPI backend. Rec
 
 Open **http://localhost:3000**. The script installs project dependencies, uses Python 3.12 through `uv` (or an installed `python3.12`), and downloads a project-local Node 22 runtime if your installed Node is older. It starts the API, demo reward worker, and frontend. Requires npm and either uv or Python 3.12. Ctrl+C stops the services.
 
-The default demo needs no wallet, cloud account, API key, or Docker. SQLite data persists in `.data/loopmint.db`. It starts with five clearly labeled demo accounts (a recycler, three center staff accounts, and a funding partner) and $500 of simulated funding. Tokens, burns, and payouts are **simulated**, not blockchain transactions. Signing in with an actual wallet while in demo mode still uses the simulated token service.
+Starting the default demo needs no wallet, cloud account, API key, or Docker. The map-based ticket picker requires a configured Google Maps key and a real registered center; fictional demo centers are not offered in that picker. Automated browser tests mock Google and center enrollment to exercise the full flow offline. SQLite data persists in `.data/loopmint.db`. It starts with five clearly labeled demo accounts (a recycler, three center staff accounts, and a funding partner) and $500 of simulated funding. Tokens, burns, and payouts are **simulated**, not blockchain transactions. Signing in with an actual wallet while in demo mode still uses the simulated token service.
 
-1. Enter the recycler demo. Open **New drop-off**, enter 2 kg of cardboard, and choose a center manually or click **Use my location**. Create the ticket and copy its QR code text.
-2. Switch **Demo view → Center staff** for the selected center (Greenpoint, Williamsburg, or Downtown). Scan or paste the ticket, enter the accepted quantity, and confirm physical receipt.
+1. After configuring Google Maps and enrolling a center with its assigned staff login, sign in as a recycler. Open **New drop-off**, enter 2 kg of cardboard, and use location or address search, then explicitly choose a participating center from the Google map results. Create the ticket and copy its QR code text.
+2. Sign in as the worker assigned to the selected center. Scan or paste the ticket, enter the accepted quantity, and confirm physical receipt.
 3. Switch back to the recycler. Within a few seconds, 40 LOOP appears as received. Center approval and transaction confirmation have separate states.
 4. Open **Share** to edit the generated caption, use the device share action, or download the PNG card. Content is generated in the browser and published by the user on their own platform.
 5. Open **My wallet** for history and simulated redemption. Open **Funding partner** to add simulated funding and inspect reservations.
@@ -38,7 +38,7 @@ API documentation: http://127.0.0.1:8000/docs.
 
 ## Find a recycling center
 
-In **New drop-off**, click **Use my location** and allow the browser's location request. Google Maps displays your position and nearby recycling listings, including centers that have not enrolled in LoopMint. Change the radius or open directions from each result. See [Google Maps setup and behavior](docs/GOOGLE_MAPS.md). Registered LoopMint centers are also sorted by straight-line distance, and you can choose one before creating a ticket. You can also search a Google address, neighborhood, or postal code, then select a matching area to find nearby listings without device location. In VS Code, open `http://localhost:3000` in Chrome or Safari for device positioning; the embedded preview may time out. Manual center selection remains available.
+In **New drop-off**, click **Use my location** and allow the browser's location request. Google Maps displays your position and nearby recycling listings, including centers that have not enrolled in LoopMint. Change the radius or open directions from each result. See [Google Maps setup and behavior](docs/GOOGLE_MAPS.md). Choose **Use for my ticket** on an enrolled Google listing or select a green L marker for a registered center. You can also search a Google address, neighborhood, or postal code, then select a matching area to find nearby listings without device location. In VS Code, open `http://localhost:3000` in Chrome or Safari for device positioning; the embedded preview may time out. The separate ticket-center list and automatic test-center selection have been removed.
 
 Location is requested only on click and is shared with Google for maps and nearby search. LoopMint keeps it in browser memory until the page is closed, the form is left, or **Clear location** is used. The LoopMint API receives only the selected center ID, never the recycler's coordinates. Distances are approximate, not travel routes. Browser geolocation requires HTTPS or localhost. A distant nearest result does not mean a center operates near you.
 
@@ -160,7 +160,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Use Node 22+ for npm commands, or prepend `.tools/node_modules/node/bin` to `PATH` after the launch script has installed its local runtime. Browser tests create demo claims and funding records; run them against a demo database. They cover desktop and mobile layouts, submission/approval/reward flow, PNG downloads, share cancellation/fallbacks, simulated redemption, funding, rejection, GPS permission/failure cases, nearest-center ticket selection, manual overrides, and location privacy. GPS tests use mocked positions, not your device location.
+Use Node 22+ for npm commands, or prepend `.tools/node_modules/node/bin` to `PATH` after the launch script has installed its local runtime. Browser tests create demo claims and funding records; run them against a demo database. They cover desktop and mobile layouts, submission/approval/reward flow, PNG downloads, share cancellation/fallbacks, simulated redemption, funding, rejection, GPS permission/failure cases, explicit map selection, cleared selections, and location privacy. GPS tests use mocked positions, not your device location.
 
 ## Deployment and remaining setup
 

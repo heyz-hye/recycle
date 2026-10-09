@@ -1,23 +1,10 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Crosshair,
-  MapPin,
-  Navigation,
-  Search,
-  LoaderCircle,
-  X,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Crosshair, MapPin, Navigation, LoaderCircle, X } from "lucide-react";
 import type { Center } from "@/lib/api";
 import GoogleCenterMap from "./GoogleCenterMap";
 import LocationSearch from "./LocationSearch";
-import {
-  Coordinates,
-  directionsUrl,
-  formatDistance,
-  rankCenters,
-  validCoordinates,
-} from "@/lib/location";
+import { Coordinates, directionsUrl, validCoordinates } from "@/lib/location";
 
 type Props = {
   centers: Center[];
@@ -39,27 +26,14 @@ export default function CenterPicker({
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [locating, setLocating] = useState(false);
   const [message, setMessage] = useState("");
-  const [query, setQuery] = useState("");
   const request = useRef(0);
   const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestCenters = useRef(centers);
-  latestCenters.current = centers;
   useEffect(
     () => () => {
       request.current++;
       if (pendingTimer.current) clearTimeout(pendingTimer.current);
     },
     [],
-  );
-  const ranked = useMemo(
-    () => rankCenters(centers, position),
-    [centers, position],
-  );
-  const nearest = ranked.find((center) => center.distanceKm !== null);
-  const visible = ranked.filter((center) =>
-    `${center.name} ${center.address}`
-      .toLowerCase()
-      .includes(query.toLowerCase().trim()),
   );
   const selected = centers.find((center) => center.id === value);
   const directions = selected ? directionsUrl(selected) : null;
@@ -75,7 +49,10 @@ export default function CenterPicker({
     setPosition(null);
     setPositionLabel(null);
     setAccuracy(null);
-    setMessage("Location cleared. You can choose any participating center.");
+    onChange("");
+    setMessage(
+      "Location cleared. Use your location or search an address to find a center.",
+    );
   }
   function applyPosition(
     next: Coordinates,
@@ -85,21 +62,14 @@ export default function CenterPicker({
     setPosition(next);
     setPositionLabel(label);
     setAccuracy(precision);
-    setQuery("");
-    const closest = rankCenters(latestCenters.current, next).find(
-      (c) => c.distanceKm !== null,
-    );
-    if (closest) onChange(closest.id);
+    onChange("");
     setMessage(
       label
-        ? "Search area selected. Showing recycling centers around that address, not your device location."
-        : closest
-          ? "Location found. The nearest listed center is selected; you can choose another."
-          : latestCenters.current.length
-            ? "These centers do not have coordinates yet. Please choose a center manually."
-            : "Location found. Looking for nearby recycling centers on Google Maps.",
+        ? "Search area selected. Choose a participating center from the map results."
+        : "Location found. Choose a participating center from the map results.",
     );
   }
+
   function locate() {
     if (!window.isSecureContext || !navigator.geolocation) {
       setMessage(
@@ -279,73 +249,6 @@ export default function CenterPicker({
           onSelect={choose}
         />
       )}
-      {position && nearest && nearest.distanceKm! > 50 && (
-        <p className="location-warning">
-          The closest listed center is{" "}
-          {formatDistance(nearest.distanceKm!).toLowerCase()}. There may not be
-          a participating center near you yet.
-        </p>
-      )}
-      {centers.some((center) => center.is_demo) && (
-        <p className="location-demo">
-          Demo centers use sample Brooklyn locations, not verified public
-          drop-off facilities.
-        </p>
-      )}
-      <h3 className="participating-title">LoopMint ticket centers</h3>
-      <label htmlFor="center-search">Search centers</label>
-      <div className="center-search">
-        <Search size={16} />
-        <input
-          id="center-search"
-          type="search"
-          placeholder="Center name or neighborhood"
-          value={query}
-          disabled={disabled}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </div>
-      <fieldset className="center-options" disabled={disabled}>
-        <legend className="sr-only">Choose a recycling center</legend>
-        {visible.map((center) => (
-          <label
-            key={center.id}
-            className={`center-option ${value === center.id ? "chosen" : ""}`}
-          >
-            <input
-              type="radio"
-              name="recycling-center"
-              value={center.id}
-              checked={value === center.id}
-              onChange={() => choose(center.id)}
-              aria-label={center.name}
-            />
-            <span className="center-option-body">
-              <span className="center-name">
-                {center.name}
-                {position && center.id === nearest?.id && (
-                  <span className="nearest-label">Nearest listed</span>
-                )}
-              </span>
-              <span className="center-address">{center.address}</span>
-              <span className="center-distance">
-                {center.distanceKm !== null
-                  ? formatDistance(center.distanceKm)
-                  : position
-                    ? "Distance unavailable"
-                    : "Use location to see distance"}
-              </span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
-      {!visible.length && (
-        <p className="small muted">
-          {centers.length
-            ? "No centers match your search. Try another name or clear your search."
-            : "No participating centers are registered yet. Please check back soon."}
-        </p>
-      )}
       {selected && (
         <div className="selected-center">
           <span>
@@ -369,7 +272,8 @@ export default function CenterPicker({
           {accuracy !== null
             ? ` Device accuracy: about ${Math.max(1, Math.round(accuracy)).toLocaleString()} m.`
             : ""}{" "}
-          Only centers with registered coordinates can be ranked.
+          Choose a participating center using “Use for my ticket” or a green L
+          marker.
         </p>
       )}
     </section>

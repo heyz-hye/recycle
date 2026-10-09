@@ -84,7 +84,7 @@ export default function GoogleCenterMap({
         if (cancelled) return;
         if (!config.api_key)
           throw new Error(
-            "Google Maps is not configured yet. You can still select a registered center below.",
+            "Google Maps is not configured yet. Please contact the site operator.",
           );
         await loadGoogleMaps(config.api_key);
         const [{ Map }, { Place }] = await Promise.all([

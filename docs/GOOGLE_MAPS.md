@@ -35,13 +35,13 @@ PYTHONPATH=backend .venv/bin/python -m app.cli configure-center \
   --google-place-id VERIFIED_GOOGLE_PLACE_ID
 ```
 
-Replace the example with your center's actual details, obtained independently from that center. The additive `center_google_places` table holds a unique Google Place ID per center. An exact ID match enables **Use for my ticket** in the Google result. Similar names or nearby coordinates never establish enrollment. Omitting `--google-place-id` when updating a center preserves its existing mapping. The API continues to accept only registered internal center IDs for tickets, and only assigned staff can verify them. Existing manual selection remains available.
+Replace the example with your center's actual details, obtained independently from that center. The additive `center_google_places` table holds a unique Google Place ID per center. An exact ID match enables **Use for my ticket** in the Google result. Similar names or nearby coordinates never establish enrollment. Omitting `--google-place-id` when updating a center preserves its existing mapping. The API continues to accept only registered internal center IDs for tickets, and only assigned staff can verify them. The drop-off form uses the Google map/results for selection. Its duplicate ticket-center list has been removed. No center is selected automatically, and clearing or changing the search area clears the selected ticket center.
 
 ## Location data and failures
 
 Before location is requested, the interface explains that coordinates go to Google Maps/Places. They remain in page memory and are not sent to the LoopMint backend or saved to browser storage. Only the selected internal center ID goes into the ticket. Google results remain in memory; no Google listing cache or server-side copy is created. Only operator-supplied Place IDs are persisted. Google and provider attribution are displayed with the map/results. Public [location privacy and map terms](/maps-information) explain the data flow and link Google's policies.
 
-Location denial, unavailable GPS, missing/invalid keys, API failures, and empty results show appropriate feedback. Manual selection remains available. Clearing location unmounts the map and invalidates pending callbacks, preventing stale results from restoring it. A refreshed location or radius triggers one search; routine dashboard polling and selecting a center do not call Places again.
+Location denial, unavailable GPS, missing/invalid keys, API failures, and empty results show appropriate feedback. Ticket creation stays disabled until a participating center is explicitly selected. Address search remains available when device location fails. Clearing location unmounts the map and invalidates pending callbacks, preventing stale results from restoring it. A refreshed location or radius triggers one search; routine dashboard polling and selecting a center do not call Places again.
 
 ## Testing without touching Tiger Data
 
