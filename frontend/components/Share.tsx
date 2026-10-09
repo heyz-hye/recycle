@@ -24,7 +24,7 @@ export default function Share({
   const label = demo
     ? "Simulated demo tokens - no real monetary value."
     : disclaimer;
-  const [caption, setCaption] = useState(() => shareCaption(claim, demo));
+  const [caption, setCaption] = useState(() => shareCaption(claim));
   const links = socialComposeLinks(shareTitle(claim), caption);
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
@@ -129,7 +129,7 @@ export default function Share({
           <button
             type="button"
             className="text-button"
-            onClick={() => setCaption(shareCaption(claim, demo))}
+            onClick={() => setCaption(shareCaption(claim))}
           >
             Reset to standard template
           </button>

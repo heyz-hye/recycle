@@ -13,9 +13,9 @@ export function shareTitle(claim: Claim) {
   return `I recycled ${recycled} and received ${tokens(claim.reward!.amount_base_units)} LOOP`;
 }
 
-export function shareCaption(claim: Claim, demo: boolean) {
+export function shareCaption(claim: Claim) {
   if (!canShareReward(claim)) return "";
-  return `${shareTitle(claim)}! Intake confirmed by my recycling center. ${demo ? "Simulated demo tokens" : "Solana Devnet demo tokens"} - no real monetary value. #LoopMint #Recycling`;
+  return `${shareTitle(claim)}! Intake confirmed by my recycling center. #LoopMint #Recycling`;
 }
 
 export function socialComposeLinks(title: string, caption: string) {

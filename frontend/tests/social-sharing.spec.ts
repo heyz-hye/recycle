@@ -95,7 +95,7 @@ test("each rewarded ticket offers a standard post and safe X/Reddit composer lin
   const template = await dialog.getByLabel("Your caption").inputValue();
   expect(template).toContain("2 bottles and 1.25 kg cardboard");
   expect(template).toContain("35 LOOP");
-  expect(template).toContain("no real monetary value");
+  expect(template).not.toMatch(/simulated|demo|devnet|monetary value/i);
   for (const privateText of [
     first.id,
     first.ticket,
@@ -201,13 +201,12 @@ test("sharing appears only after the token reward confirms", async ({
 
 test("templates omit unreceived rewards and safely encode special characters", () => {
   expect(
-    shareCaption(
-      { ...first, reward: { ...first.reward!, state: "sent" } },
-      true,
-    ),
+    shareCaption({ ...first, reward: { ...first.reward!, state: "sent" } }),
   ).toBe("");
-  expect(shareCaption({ ...first, status: "rejected" }, true)).toBe("");
-  expect(shareCaption(first, false)).toContain("Solana Devnet");
+  expect(shareCaption({ ...first, status: "rejected" })).toBe("");
+  expect(shareCaption(first)).toBe(
+    "I recycled 2 bottles and 1.25 kg cardboard and received 35 LOOP! Intake confirmed by my recycling center. #LoopMint #Recycling",
+  );
   const caption = "Recycled & received #LOOP + 🌱\nA second line";
   const links = socialComposeLinks("My recycling", caption);
   expect(new URL(links.x).searchParams.get("text")).toBe(caption);

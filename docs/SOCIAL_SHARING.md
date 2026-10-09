@@ -2,7 +2,7 @@
 
 After a ticket is verified **and** its reward reaches `confirmed`, the recycler sees a share prompt and a **Share** button on that ticket's activity row. Dismissing one prompt allows the next rewarded ticket's prompt to appear. The row action remains available afterward. Pending, unfunded, rejected, and unconfirmed rewards do not offer a received-token post.
 
-The editable standard caption and downloadable PNG use only center-accepted quantities and that ticket's confirmed reward amount. They exclude the submitted estimate, ticket code, account/wallet identity, private staff notes, and transaction signature. The standard caption identifies simulated or Solana Devnet tokens as having no real monetary value. **Reset to standard template** restores the generated caption.
+The editable standard caption and downloadable PNG use only center-accepted quantities and that ticket's confirmed reward amount. They exclude the submitted estimate, ticket code, account/wallet identity, private staff notes, and transaction signature. The caption focuses on the recycled materials and LOOP received, without simulated-token wording. The PNG retains its demo-token label. **Reset to standard template** restores the generated caption.
 
 - **Share on X** opens the X composer with the edited caption in its `text` parameter. The user signs in if needed, reviews the draft, and publishes themselves. Long edits may need shortening in X.
 - **Share on Reddit** opens the text-post submission page with a generated title and caption parameters. It also copies the caption on click because Reddit clients may ignore body-prefill parameters. If clipboard access fails, the caption stays visible for manual copying. The user chooses their profile or a community and publishes themselves.
