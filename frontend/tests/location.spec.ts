@@ -233,7 +233,7 @@ test("far-away users are not told that sample centers are nearby", async ({
   await page
     .getByRole("button", { name: "Use my location", exact: true })
     .click();
-  await expect(page.locator(".location-warning")).toContainText(
+  await expect(page.locator(".center-picker > .location-warning")).toContainText(
     "There may not be a participating center near you yet",
   );
   await expect(page.locator(".location-demo")).toContainText(

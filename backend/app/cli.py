@@ -60,6 +60,9 @@ def main():
     center.add_argument("--address", required=True)
     center.add_argument("--latitude", required=True, type=float)
     center.add_argument("--longitude", required=True, type=float)
+    center.add_argument(
+        "--google-place-id", help="Verified Google Place ID for ticket matching"
+    )
     sub.add_parser(
         "enable-timescale",
         help="Create the event hypertable and hourly continuous aggregate",
@@ -147,7 +150,14 @@ def main():
             data = CenterConfiguration(
                 **{
                     key: getattr(args, key)
-                    for key in ("id", "name", "address", "latitude", "longitude")
+                    for key in (
+                        "id",
+                        "name",
+                        "address",
+                        "latitude",
+                        "longitude",
+                        "google_place_id",
+                    )
                 }
             )
         except ValidationError as exc:

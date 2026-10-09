@@ -26,7 +26,7 @@ API documentation: http://127.0.0.1:8000/docs.
 - Recycler, assigned center verifier, and funding partner roles, enforced by the API.
 - Wallet Standard sign-in with one-time Ed25519 challenges and HttpOnly session cookies. New wallets always receive recycler access. Trusted roles are provisioned with an operator command.
 - Plastic bottle counts and integer-gram cardboard submissions, unique expiring QR tickets, camera scanning where supported, manual code entry, and ticket renewal.
-- Opt-in GPS center discovery, nearest-center selection, approximate distances, manual search, and tickets tied to the selected participating center.
+- Opt-in GPS with interactive Google Maps, real nearby Google Places listings, directions, approximate distances, and tickets restricted to registered participating centers.
 - Physical receipt confirmation, measured quantities, partial acceptance, rejection reasons, center restrictions, and self-approval prevention.
 - Rate snapshots, separate verification/payment states, integer reward calculations, atomic funding reservations, waiting-for-funding processing, and idempotent approvals/deposits/redemptions.
 - A durable worker with signed-transaction persistence before broadcast, signature reconciliation, and duplicate-safe retries. Distinct rewards include unique on-chain memos even when amounts and wallets match.
@@ -38,11 +38,11 @@ API documentation: http://127.0.0.1:8000/docs.
 
 ## Find a recycling center
 
-In **New drop-off**, click **Use my location** and allow the browser's location request. Centers with registered coordinates are sorted by straight-line distance and the nearest listed center is selected. You can choose another center before creating the ticket. Search by name or neighborhood works without location access. Permission denial, unavailable GPS, and timeouts all retain manual selection.
+In **New drop-off**, click **Use my location** and allow the browser's location request. Google Maps displays your position and nearby recycling listings, including centers that have not enrolled in LoopMint. Change the radius or open directions from each result. See [Google Maps setup and behavior](docs/GOOGLE_MAPS.md). Registered LoopMint centers are also sorted by straight-line distance, and you can choose one before creating a ticket. Manual center search works without location access.
 
-Location is requested only on click and stays in browser memory until the page is closed, the form is left, or **Clear location** is used. The API receives only the selected center ID, never the recycler's coordinates. Distances are approximate, not travel routes. Browser geolocation requires HTTPS or localhost. A distant nearest result does not mean a center operates near you.
+Location is requested only on click and is shared with Google for maps and nearby search. LoopMint keeps it in browser memory until the page is closed, the form is left, or **Clear location** is used. The LoopMint API receives only the selected center ID, never the recycler's coordinates. Distances are approximate, not travel routes. Browser geolocation requires HTTPS or localhost. A distant nearest result does not mean a center operates near you.
 
-The demo includes **sample Brooklyn locations**, not verified public drop-off facilities. These samples have no directions links. In production, only registered participating centers can receive tickets, because their assigned staff must confirm intake. The app does not search a public directory of unrelated facilities.
+The demo includes **sample Brooklyn locations**, not verified public drop-off facilities. These samples have no directions links. Google search results contain actual listings, but only registered participating centers can receive tickets because their assigned staff must confirm intake. Operators match enrolled centers to Google results using verified Place IDs; discovery alone does not enable rewards.
 
 Register a participating center using its verified address and coordinates:
 
@@ -71,6 +71,8 @@ Copy `backend/.env.example` to the repository root as `.env`. Never commit keys 
 | `DEMO_AUTO_WORKER` | In-process demo worker; disable when using the standalone worker |
 | `DEMO_ACCOUNTS_ENABLED` | Disable shared demo logins and sample seeding for individual accounts; independent of simulated token mode |
 | `TIMESCALE_ENABLED` | Read the continuous aggregate after applying the Timescale migration |
+| `GOOGLE_MAPS_BROWSER_KEY` | Referrer-restricted browser key for Maps JavaScript API and Places API (New) |
+| `GOOGLE_MAPS_MAP_ID` | JavaScript map ID for Advanced Markers; `DEMO_MAP_ID` for local development |
 | `SOLANA_RPC_URL` | Devnet RPC; the adapter verifies the network genesis hash |
 | `SOLANA_MINT` | A classic SPL Token mint with exactly two decimals |
 | `SOLANA_ISSUER_KEYPAIR` | Server-side path to the mint authority/payer keypair JSON |

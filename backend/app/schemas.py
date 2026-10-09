@@ -124,6 +124,7 @@ class CenterConfiguration(StrictModel):
     address: str = Field(min_length=1, max_length=300)
     latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
     longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    google_place_id: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class RedemptionConfirm(StrictModel):

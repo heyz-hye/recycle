@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     demo_auto_worker: bool = True
     demo_accounts_enabled: bool = True
     timescale_enabled: bool = False
+    google_maps_browser_key: str = ""
+    google_maps_map_id: str = "DEMO_MAP_ID"
     ticket_ttl_seconds: int = 1800
     solana_rpc_url: str = "https://api.devnet.solana.com"
     solana_mint: str = ""

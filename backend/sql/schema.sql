@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS users (
  role TEXT NOT NULL CHECK(role IN ('recycler','verifier','funding_partner')),
  center_id TEXT REFERENCES centers(id)
 );
+CREATE TABLE IF NOT EXISTS center_google_places (
+ center_id TEXT PRIMARY KEY REFERENCES centers(id), google_place_id TEXT UNIQUE NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sessions (
  token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires_at BIGINT NOT NULL
 );

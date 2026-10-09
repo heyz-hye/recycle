@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import type { Center } from "@/lib/api";
+import GoogleCenterMap from "./GoogleCenterMap";
 import {
   Coordinates,
   directionsUrl,
@@ -131,7 +132,9 @@ export default function CenterPicker({
             );
           } else
             setMessage(
-              "These centers do not have coordinates yet. Please choose a center manually.",
+              centers.length
+                ? "These centers do not have coordinates yet. Please choose a center manually."
+                : "Location found. Looking for nearby recycling centers on Google Maps.",
             );
         },
         (error) => {
@@ -174,14 +177,14 @@ export default function CenterPicker({
         <MapPin size={23} />
       </div>
       <p className="small muted">
-        Find the closest participating center, then create a ticket for that
-        location.
+        Find nearby recycling centers on Google Maps. Choose an enrolled
+        LoopMint center to create a ticket.
       </p>
       <div className="location-actions">
         <button
           type="button"
           className="button secondary"
-          disabled={disabled || locating || !centers.length}
+          disabled={disabled || locating}
           onClick={locate}
         >
           {locating ? (
@@ -208,9 +211,27 @@ export default function CenterPicker({
         )}
       </div>
       <p className="location-privacy">
-        Your location stays in this page. Only your selected center is saved
-        with the ticket.
+        Using location shares your coordinates with Google to display the map
+        and find nearby places. LoopMint does not store your GPS coordinates.
+        Only your selected participating center is saved with the ticket.{" "}
+        <a href="/maps-information#privacy" target="_blank" rel="noreferrer">
+          Location privacy
+        </a>
+        {" · "}
+        <a href="/maps-information#terms" target="_blank" rel="noreferrer">
+          Map terms
+        </a>
       </p>
+      {position && (
+        <GoogleCenterMap
+          position={position}
+          accuracy={accuracy}
+          centers={centers}
+          selected={value}
+          disabled={disabled}
+          onSelect={choose}
+        />
+      )}
       <p className="location-status" role="status" aria-live="polite">
         {message}
       </p>
@@ -227,6 +248,7 @@ export default function CenterPicker({
           drop-off facilities.
         </p>
       )}
+      <h3 className="participating-title">LoopMint ticket centers</h3>
       <label htmlFor="center-search">Search centers</label>
       <div className="center-search">
         <Search size={16} />

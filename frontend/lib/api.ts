@@ -85,6 +85,7 @@ export type Center = {
   latitude: number | null;
   longitude: number | null;
   is_demo: number;
+  google_place_id?: string | null;
 };
 export class ApiError extends Error {
   constructor(
