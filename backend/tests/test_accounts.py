@@ -282,6 +282,7 @@ def test_additive_account_schema_keeps_legacy_users_and_claims(client):
     ).json()
     with transaction() as c:
         for table in (
+            "government_funding_profiles",
             "account_credentials",
             "staff_profiles",
             "funding_member_profiles",

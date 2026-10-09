@@ -3,14 +3,15 @@
 import argparse
 from getpass import getpass
 from pathlib import Path
+
 from solders.pubkey import Pubkey
+
 from .config import get_settings
 from .db import initialize, transaction
-from .services.common import uid
 from .schemas import CenterConfiguration, Registration
+from .services.accounts import clear_email_attempts, create_account, hash_password
 from .services.centers import configure_center
-from .services.accounts import create_account, hash_password, clear_email_attempts
-from .services.common import now
+from .services.common import now, uid
 
 
 def main():
@@ -28,11 +29,25 @@ def main():
     account_parser.add_argument("--email", required=True)
     account_parser.add_argument("--name", required=True)
     account_parser.add_argument(
-        "--role", choices=["recycler", "staff", "funding_member"], required=True
+        "--role",
+        choices=["recycler", "staff", "funding_member", "fund_manager"],
+        required=True,
     )
     account_parser.add_argument("--center")
-    account_parser.add_argument("--job-title", default="Center staff")
+    account_parser.add_argument("--job-title")
     account_parser.add_argument("--organization", default="")
+    account_parser.add_argument(
+        "--department", help="Government department, required for fund_manager"
+    )
+    testing = sub.add_parser(
+        "create-test-accounts",
+        help="Create individual test logins and two fictional sites in simulated mode",
+    )
+    testing.add_argument(
+        "--output",
+        default=".data/test-role-logins.json",
+        help="New private credential file; never overwritten",
+    )
     reset = sub.add_parser(
         "reset-password",
         help="Set a new password privately and revoke existing sessions",
@@ -85,15 +100,15 @@ def main():
                     print(
                         "SQLite connected. Set DATABASE_URL to connect Tiger Data PostgreSQL."
                     )
-        except Exception:
+        except Exception:  # noqa: BLE001 -- redact credentials from driver errors
             parser.error(
                 "Database connection failed. Check DATABASE_URL, network access, and TLS settings. Credentials were not printed."
             )
         return
     initialize()
     if args.command in ("create-account", "reset-password"):
-        from pydantic import ValidationError
         from fastapi import HTTPException
+        from pydantic import ValidationError
 
         password = getpass("Password (15–128 characters): ")
         if password != getpass("Confirm password: "):
@@ -110,16 +125,29 @@ def main():
                     role = {
                         "staff": "verifier",
                         "funding_member": "funding_partner",
+                        "fund_manager": "funding_partner",
                         "recycler": "recycler",
                     }[args.role]
+                    if args.role == "fund_manager" and not args.department:
+                        parser.error(
+                            "--department and --organization are required for a government fund manager"
+                        )
+                    if args.department is not None and args.role != "fund_manager":
+                        parser.error("--department is only valid for fund_manager")
                     create_account(
                         c,
                         data,
                         hashed,
                         role,
                         args.center,
-                        args.job_title,
+                        args.job_title
+                        or (
+                            "Fund manager"
+                            if args.role == "fund_manager"
+                            else "Center staff"
+                        ),
                         args.organization,
+                        args.department,
                     )
                 else:
                     row = c.one(
@@ -142,6 +170,22 @@ def main():
             "Account created."
             if args.command == "create-account"
             else "Password reset; previous sessions revoked."
+        )
+    elif args.command == "create-test-accounts":
+        from fastapi import HTTPException
+
+        from .services.test_accounts import create_test_accounts
+
+        try:
+            create_test_accounts(Path(args.output))
+        except (HTTPException, OSError) as exc:
+            parser.error(
+                exc.detail
+                if isinstance(exc, HTTPException)
+                else "Cannot create the credential file. Use a new writable path; existing files are never overwritten."
+            )
+        print(
+            "Four individual test logins created. Passwords are in the private output file; no funds or tickets were created."
         )
     elif args.command == "configure-center":
         from pydantic import ValidationError
@@ -170,6 +214,7 @@ def main():
         )
     elif args.command == "create-devnet-mint":
         import json
+
         from solana.rpc.api import Client
         from solders.keypair import Keypair
         from spl.token.client import Token

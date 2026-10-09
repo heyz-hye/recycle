@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS staff_profiles (
 CREATE TABLE IF NOT EXISTS funding_member_profiles (
  user_id TEXT PRIMARY KEY REFERENCES users(id), organization TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS government_funding_profiles (
+ user_id TEXT PRIMARY KEY REFERENCES funding_member_profiles(user_id),
+ department TEXT NOT NULL CHECK(length(trim(department)) BETWEEN 1 AND 150),
+ job_title TEXT NOT NULL CHECK(length(trim(job_title)) BETWEEN 1 AND 100)
+);
 CREATE TABLE IF NOT EXISTS auth_attempts (
  key_hash TEXT PRIMARY KEY, attempts BIGINT NOT NULL, expires_at BIGINT NOT NULL
 );

@@ -22,7 +22,7 @@ API documentation: http://127.0.0.1:8000/docs.
 
 ## What is implemented
 
-- Individual email/password sign-up for recyclers, operator-provisioned staff and funding-member logins, account details, password changes/resets, and staff job locations. See [accounts and Tiger Data setup](docs/ACCOUNTS_AND_TIGER_DATA.md).
+- Individual email/password sign-up for recyclers, site-restricted worker accounts, government fund-manager agency/department profiles, password changes/resets, and generated role test logins. See [accounts, Tiger Data setup, and test scenarios](docs/ACCOUNTS_AND_TIGER_DATA.md).
 - Recycler, assigned center verifier, and funding partner roles, enforced by the API.
 - Wallet Standard sign-in with one-time Ed25519 challenges and HttpOnly session cookies. New wallets always receive recycler access. Trusted roles are provisioned with an operator command.
 - Plastic bottle counts and integer-gram cardboard submissions, unique expiring QR tickets, camera scanning where supported, manual code entry, and ticket renewal.

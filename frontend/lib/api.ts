@@ -10,6 +10,8 @@ export type User = {
   job_address: string | null;
   job_title: string | null;
   organization: string | null;
+  government_agency?: string | null;
+  government_department?: string | null;
 };
 export type Item = {
   material: "bottles" | "cardboard";
