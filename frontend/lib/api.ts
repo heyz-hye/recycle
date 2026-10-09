@@ -5,6 +5,11 @@ export type User = {
   wallet: string;
   role: Role;
   center_id: string | null;
+  email: string | null;
+  job_location: string | null;
+  job_address: string | null;
+  job_title: string | null;
+  organization: string | null;
 };
 export type Item = {
   material: "bottles" | "cardboard";

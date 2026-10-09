@@ -22,6 +22,7 @@ API documentation: http://127.0.0.1:8000/docs.
 
 ## What is implemented
 
+- Individual email/password sign-up for recyclers, operator-provisioned staff and funding-member logins, account details, password changes/resets, and staff job locations. See [accounts and Tiger Data setup](docs/ACCOUNTS_AND_TIGER_DATA.md).
 - Recycler, assigned center verifier, and funding partner roles, enforced by the API.
 - Wallet Standard sign-in with one-time Ed25519 challenges and HttpOnly session cookies. New wallets always receive recycler access. Trusted roles are provisioned with an operator command.
 - Plastic bottle counts and integer-gram cardboard submissions, unique expiring QR tickets, camera scanning where supported, manual code entry, and ticket renewal.
@@ -68,6 +69,7 @@ Copy `backend/.env.example` to the repository root as `.env`. Never commit keys 
 | `PUBLIC_ORIGIN` | Exact frontend origin permitted for browser mutations and wallet sign-in |
 | `SECURE_COOKIES` | Set `true` when served over HTTPS |
 | `DEMO_AUTO_WORKER` | In-process demo worker; disable when using the standalone worker |
+| `DEMO_ACCOUNTS_ENABLED` | Disable shared demo logins and sample seeding for individual accounts; independent of simulated token mode |
 | `TIMESCALE_ENABLED` | Read the continuous aggregate after applying the Timescale migration |
 | `SOLANA_RPC_URL` | Devnet RPC; the adapter verifies the network genesis hash |
 | `SOLANA_MINT` | A classic SPL Token mint with exactly two decimals |
@@ -89,7 +91,7 @@ The included adapter is implemented and tested with signed transactions and mock
    ```
 
    Put the printed mint address in `SOLANA_MINT`. The configured issuer must be its mint authority. Mint decimals are fixed at 2.
-3. Provision trusted wallets from your server:
+3. Register your real center with `configure-center` (see above), then provision trusted wallets from your server. Use its registered ID in `--center`:
 
    ```bash
    PYTHONPATH=backend .venv/bin/python -m app.cli grant-role \
@@ -120,6 +122,8 @@ All authoritative writes use a transaction. PostgreSQL uses a shared transaction
 The worker commits signed bytes, signature, and last valid block height before broadcasting. A lost network response causes reconciliation of the same signature; retries rebroadcast identical bytes. Failed/expired transactions are marked `needs_review` and keep funding reserved. Operators must check the stored signature on Devnet before recovery; no automatic re-mint occurs. Inspect `reward_jobs.last_error` and the worker logs. This is intentionally conservative around uncertain transactions.
 
 ## PostgreSQL and TimescaleDB
+
+For **Tiger Data cloud PostgreSQL**, use [the connection and account setup guide](docs/ACCOUNTS_AND_TIGER_DATA.md) and [`backend/tiger.env.example`](backend/tiger.env.example). The schema includes individual credentials, staff job profiles linked to centers, and funding-member organizations. Set the service's connection URL in server-side `DATABASE_URL`, run `app.cli db-check` and `app.cli init`, provision accounts, and restart the backend. SQLite records are not automatically transferred.
 
 To run a full local PostgreSQL stack, with Docker running:
 

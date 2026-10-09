@@ -1,9 +1,43 @@
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
+import re
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class EmailInput(StrictModel):
+    email: str = Field(min_length=3, max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def normalized_email(cls, value):
+        value = value.strip().lower()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+            raise ValueError("Enter a valid email address.")
+        return value
+
+
+class EmailLogin(EmailInput):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class Registration(EmailInput):
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=15, max_length=128)
+
+    @field_validator("username")
+    @classmethod
+    def display_name(cls, value):
+        if not value.strip():
+            raise ValueError("Enter your name.")
+        return value.strip()
+
+
+class PasswordChange(StrictModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=15, max_length=128)
 
 
 class Item(StrictModel):

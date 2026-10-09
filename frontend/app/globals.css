@@ -288,6 +288,8 @@ input[type="checkbox"] {
   padding: 31px 22px 20px;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 30;
 }
 .sidebar .brand {
@@ -2255,4 +2257,93 @@ input[type="checkbox"] {
     padding: 10px 12px;
     font-size: 11px;
   }
+}
+.account-login {
+  max-width: 460px;
+  margin: 28px 0 20px;
+  padding: 24px;
+  border: 1px solid var(--line, #dce3d7);
+  border-radius: 18px;
+  background: #fff;
+}
+.account-login h2 {
+  font-size: 22px;
+  margin: 0 0 8px;
+}
+.account-login > p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.account-login fieldset,
+.password-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.account-login label,
+.password-form label {
+  display: block;
+  margin: 15px 0 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.account-login input,
+.password-form input {
+  width: 100%;
+}
+.account-login .button {
+  margin-top: 18px;
+}
+.account-login > .text-button {
+  margin-top: 18px;
+  text-align: left;
+}
+.account-login .account-help {
+  margin: 18px 0 0;
+  font-size: 12px;
+}
+.account-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0 24px;
+}
+.account-identity h3,
+.account-identity p {
+  margin: 4px 0;
+}
+.account-fields {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 14px;
+  margin: 24px 0;
+  font-size: 14px;
+}
+.account-fields dt {
+  color: #76816f;
+}
+.account-fields dd {
+  margin: 0;
+}
+.account-fields small {
+  display: block;
+  margin-top: 6px;
+  color: #76816f;
+}
+.account-wallet {
+  overflow-wrap: anywhere;
+}
+.password-form {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #dce3d7;
+}
+.password-form h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.password-form .button {
+  margin-top: 12px;
 }

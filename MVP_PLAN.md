@@ -11,7 +11,8 @@ Users bring recyclable materials to a participating center. Authorized center st
 - Mobile-friendly website; plastic bottles and dry cardboard; registered participating centers with assigned staff.
 - Opt-in browser GPS selects the nearest registered center by approximate straight-line distance. Keep manual search and selection available. Store center coordinates, never recycler coordinates; generate each ticket for the selected center. Demo locations must be labeled as samples.
 - Three roles: recycler, center verifier, and funding partner. Roles and center assignments are server-controlled.
-- Wallet login, username, claim submission, unique short-lived QR ticket, and center review.
+- Individual email/password login for recyclers, staff, and funding members; optional signed wallet login/linking; claim submission, unique short-lived QR ticket, and center review.
+- Recyclers may register themselves. Operators provision staff and funding members. Staff profiles include a job title and a registered job location via `users.center_id`; funding-member profiles include their organization.
 - Submission records selected center, material, and estimated quantity. A photo may be kept as optional supporting evidence; it is never required for automated analysis.
 - Wallet shows pending and confirmed rewards, balance, transaction history, explorer links, and simulated redemption.
 - Generate an optional post template from verified quantities and confirmed rewards, then prompt users to share it on their own social platforms. LoopMint does not host posts or a community feed.
@@ -73,7 +74,7 @@ Retain the original plan's proposed stack, with the AI service removed:
 - Sharing interface: browser-generated caption and image card, preview, share action, copy, and download; no hosted social content or social account integration.
 - API: Python and FastAPI for permissions, submissions, confirmations, and reward endpoints.
 - Validation: Pydantic for request and response schemas, material units, and accepted quantities.
-- Database: Tiger Cloud / TimescaleDB; Psycopg 3 for parameterized SQL and transactions.
+- Database: Tiger Data PostgreSQL / TimescaleDB; Psycopg 3 for parameterized SQL and transactions, TLS connection settings, and additive schema initialization.
 - Token services: Solana.py and solders; browser wallet through Solana Kit and React bindings.
 - Background work: Python worker and PostgreSQL jobs for issuance, retries, and reconciliation.
 - Optional evidence: private Cloudflare R2 objects with short-lived signed access.
@@ -96,6 +97,7 @@ There is no Gemini client, AI schema, AI dependency, AI API key, or AI service i
 ### Records and analytics
 
 - `users`, `centers`, `center_locations`: wallet, username, roles, center assignment, acceptance policies, and operator-maintained center coordinates with a demo marker.
+- `account_credentials`, `staff_profiles`, `funding_member_profiles`: unique normalized email and salted password hash, individual job title, and funding organization. Job location joins the staff user's assigned center. `sessions` and `auth_attempts` store hashed session tokens and temporary authentication rate limits.
 - `claims`, `claim_items`, `verifications`: ticket identity and expiry, optional evidence, submitted and accepted quantities, center, verifier, receipt timestamp, decision, and rejection reason.
 - `reward_rules`: material, unit, rate, effective dates, and immutable rate snapshot on approval.
 - `funding_ledger`: received funds, reservations, releases, and simulated payouts.
@@ -120,6 +122,7 @@ Use ordinary PostgreSQL tables for authoritative state, funding, and unique cons
 - Rejected claim: no reward issuance or funding reservation.
 - Invalid confirmation: reject negative quantities, wrong units, unsupported materials, or a confirmation with no accepted quantity.
 - Unauthorized verifier: reject recycler approval, another center's verifier, or self-approval without changing claim, funding, or reward records.
+- Individual login: public registration cannot select a privileged role or job location; staff logins expose their assigned center and retain individual confirmation identity; funding-member deposits retain individual actor identity. Password changes and operator resets invalidate previous sessions. Shared demo logins can be disabled independently of simulated tokens.
 - Center discovery: request GPS only on click; rank geocoded centers accurately; bind the ticket to the selected center; retain manual selection after denial, timeout, or unavailable coordinates. Do not send or persist recycler coordinates. Manual selection must override a pending GPS request.
 - Duplicate or concurrent confirmation: one reward entitlement, one funding reservation, and one issuance job per claim.
 - Ticket reuse or expiry: no new approval from an already consumed or expired ticket; provide a controlled replacement process for an unverified claim.

@@ -16,6 +16,22 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS sessions (
  token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires_at BIGINT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS account_credentials (
+ user_id TEXT PRIMARY KEY REFERENCES users(id),
+ email TEXT UNIQUE NOT NULL CHECK(email=lower(email)),
+ password_hash TEXT NOT NULL, created_at BIGINT NOT NULL, password_changed_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS staff_profiles (
+ user_id TEXT PRIMARY KEY REFERENCES users(id), job_title TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS funding_member_profiles (
+ user_id TEXT PRIMARY KEY REFERENCES users(id), organization TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS auth_attempts (
+ key_hash TEXT PRIMARY KEY, attempts BIGINT NOT NULL, expires_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS auth_attempt_expiry ON auth_attempts(expires_at);
+CREATE INDEX IF NOT EXISTS staff_job_location ON users(center_id, role);
 CREATE TABLE IF NOT EXISTS challenges (
  id TEXT PRIMARY KEY, wallet TEXT NOT NULL, message TEXT NOT NULL, expires_at BIGINT NOT NULL
 );
