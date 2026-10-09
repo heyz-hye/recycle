@@ -67,6 +67,7 @@ import {
 import { wallets, loginWallet, signBurn } from "@/lib/wallet";
 import Modal from "@/components/Modal";
 import Share from "@/components/Share";
+import { canShareReward } from "@/lib/sharing";
 import Scanner from "@/components/Scanner";
 import CenterPicker from "@/components/CenterPicker";
 import { AccountLogin, AccountDetails } from "@/components/Account";
@@ -283,7 +284,9 @@ export default function Home() {
         .reduce((a, i) => a + (i.accepted_quantity || 0), 0),
     0,
   );
-  const prompt = accepted.find((c) => !dismissed.includes(c.id));
+  const prompt = accepted.find(
+    (c) => canShareReward(c) && !dismissed.includes(c.id),
+  );
   const nav: { id: Page; icon: ReactNode }[] = [
     { id: "overview", icon: <LayoutDashboard size={19} /> },
     ...(user?.role === "recycler"
@@ -357,7 +360,7 @@ export default function Home() {
                 >
                   <ChevronRight size={20} />
                 </button>
-              ) : c.status === "verified" ? (
+              ) : canShareReward(c) ? (
                 <button
                   className="button small-button secondary"
                   onClick={() =>
@@ -368,6 +371,8 @@ export default function Home() {
                 >
                   <Share2 size={14} /> Share
                 </button>
+              ) : c.status === "verified" ? (
+                <span className="small muted">Share once rewards arrive</span>
               ) : c.status !== "rejected" ? (
                 <button className="text-button" onClick={() => setTicket(c)}>
                   View ticket <ArrowUpRight size={14} />
@@ -752,8 +757,9 @@ export default function Home() {
                   <div>
                     <strong>That’s an impact worth sharing.</strong>
                     <p>
-                      Your drop-off is center confirmed. Create a post for your
-                      own social platform.
+                      You received {tokens(prompt.reward!.amount_base_units)}{" "}
+                      LOOP for this drop-off. Share your recycling and reward on
+                      X or Reddit.
                     </p>
                   </div>
                   <button
@@ -1239,6 +1245,7 @@ export default function Home() {
       )}
       {share && (
         <Share
+          key={share.id}
           claim={share}
           demo={demo}
           onClose={() => {

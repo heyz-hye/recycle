@@ -1,7 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Copy, Download, Share2, Check } from "lucide-react";
+import { Copy, Download, Share2, Check, ExternalLink } from "lucide-react";
 import { Claim, quantity, tokens } from "@/lib/api";
+import {
+  canShareReward,
+  shareCaption,
+  shareTitle,
+  socialComposeLinks,
+} from "@/lib/sharing";
 import Modal from "./Modal";
 const disclaimer = "Solana Devnet demo tokens - no real monetary value.";
 export default function Share({
@@ -14,13 +20,12 @@ export default function Share({
   onClose: () => void;
 }) {
   const items = claim.items.filter((i) => (i.accepted_quantity || 0) > 0);
-  const received = claim.reward?.state === "confirmed";
+  const received = canShareReward(claim);
   const label = demo
     ? "Simulated demo tokens - no real monetary value."
     : disclaimer;
-  const [caption, setCaption] = useState(
-    `I dropped off ${items.map((i) => quantity(i, true)).join(" and ")} for recycling, confirmed by my recycling center.${received ? ` I received ${tokens(claim.reward!.amount_base_units)} LOOP demo tokens. ${label}` : ""} #LoopMint #Recycling`,
-  );
+  const [caption, setCaption] = useState(() => shareCaption(claim, demo));
+  const links = socialComposeLinks(shareTitle(claim), caption);
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -87,11 +92,19 @@ export default function Share({
       setBusy(false);
     }
   }
+  if (!received)
+    return (
+      <Modal title="Share your impact" onClose={onClose}>
+        <p>
+          Your post will be ready once your ticket’s token reward is confirmed.
+        </p>
+      </Modal>
+    );
   return (
     <Modal title="Share your impact" onClose={onClose} wide>
       <p className="muted modal-intro">
-        A small moment worth sharing. Make it your own, then post it on your
-        favorite platform.
+        Your reward has arrived. Edit your post, then review and publish it from
+        your own X or Reddit account.
       </p>
       <div className="share-grid">
         <canvas
@@ -112,6 +125,57 @@ export default function Share({
           <p className="small muted">
             Only confirmed intake and received rewards appear. Your wallet,
             ticket, and private evidence stay private.
+          </p>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => setCaption(shareCaption(claim, demo))}
+          >
+            Reset to standard template
+          </button>
+          <div className="button-row" aria-label="Choose a social platform">
+            <a
+              className="button primary"
+              href={links.x}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Share on X <ExternalLink size={16} />
+            </a>
+            <a
+              className="button primary"
+              href={links.reddit}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                setFeedback(
+                  "In Reddit, choose your profile or a community, review the post, and publish when ready.",
+                );
+                if (navigator.clipboard) {
+                  void navigator.clipboard.writeText(caption).then(
+                    () =>
+                      setFeedback(
+                        "Caption copied. Paste it into Reddit if the post body is blank, then review and publish.",
+                      ),
+                    () =>
+                      setFeedback(
+                        "Reddit may leave the post body blank. Copy the caption here and paste it into your post.",
+                      ),
+                  );
+                } else {
+                  setFeedback(
+                    "Reddit may leave the post body blank. Select and copy the caption here, then paste it into your post.",
+                  );
+                }
+              }}
+            >
+              Share on Reddit <ExternalLink size={16} />
+            </a>
+          </div>
+          <p className="small muted">
+            Sign in on the platform if asked. On Reddit, choose your profile or
+            a community. You decide when to publish. Download the card below if
+            you want to attach it to your post.
           </p>
           <button
             disabled={busy}

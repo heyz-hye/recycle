@@ -15,7 +15,7 @@ Starting the default demo needs no wallet, cloud account, API key, or Docker. Th
 1. After configuring Google Maps and enrolling a center with its assigned staff login, sign in as a recycler. Open **New drop-off**, enter 2 kg of cardboard, and use location or address search, then explicitly choose a participating center from the Google map results. Create the ticket and copy its QR code text.
 2. Sign in as the worker assigned to the selected center. Scan or paste the ticket, enter the accepted quantity, and confirm physical receipt.
 3. Switch back to the recycler. Within a few seconds, 40 LOOP appears as received. Center approval and transaction confirmation have separate states.
-4. Open **Share** to edit the generated caption, use the device share action, or download the PNG card. Content is generated in the browser and published by the user on their own platform.
+4. Once the token reward is confirmed, open **Share** on that ticket. The standard template includes the accepted quantities and tokens actually received. Edit it, then choose **Share on X** or **Share on Reddit** to review and publish from your own account. Download the PNG card to attach it. Each rewarded ticket remains shareable from its activity row.
 5. Open **My wallet** for history and simulated redemption. Open **Funding partner** to add simulated funding and inspect reservations.
 
 API documentation: http://127.0.0.1:8000/docs.
@@ -32,7 +32,7 @@ API documentation: http://127.0.0.1:8000/docs.
 - A durable worker with signed-transaction persistence before broadcast, signature reconciliation, and duplicate-safe retries. Distinct rewards include unique on-chain memos even when amounts and wallets match.
 - A real Solana Devnet SPL minting/burn adapter plus an explicitly simulated local adapter.
 - Wallet reward/redemption history, Devnet explorer links for actual signatures, aggregate impact and funding dashboards, and five-second polling.
-- Browser-only share captions and PNG cards, editable previews, copy/download fallbacks, canceled sharing behavior, and no server-side social content.
+- Per-ticket share prompts after reward confirmation, standard captions and PNG cards, X/Reddit composer links, editable previews, copy/download fallbacks, and no server-side social content. See [social sharing behavior](docs/SOCIAL_SHARING.md).
 - PostgreSQL through Psycopg 3, local SQLite fallback, and an optional TimescaleDB hypertable/continuous aggregate migration.
 - Docker definitions, a local launch script, backend tests against SQLite or PostgreSQL, and desktop/mobile Playwright flows.
 
