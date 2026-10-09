@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { Center } from "@/lib/api";
 import GoogleCenterMap from "./GoogleCenterMap";
+import LocationSearch from "./LocationSearch";
 import {
   Coordinates,
   directionsUrl,
@@ -34,6 +35,7 @@ export default function CenterPicker({
   onLocatingChange,
 }: Props) {
   const [position, setPosition] = useState<Coordinates | null>(null);
+  const [positionLabel, setPositionLabel] = useState<string | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [locating, setLocating] = useState(false);
   const [message, setMessage] = useState("");
@@ -71,13 +73,37 @@ export default function CenterPicker({
   function clearLocation() {
     cancelRequest();
     setPosition(null);
+    setPositionLabel(null);
     setAccuracy(null);
     setMessage("Location cleared. You can choose any participating center.");
+  }
+  function applyPosition(
+    next: Coordinates,
+    precision: number | null,
+    label: string | null = null,
+  ) {
+    setPosition(next);
+    setPositionLabel(label);
+    setAccuracy(precision);
+    setQuery("");
+    const closest = rankCenters(latestCenters.current, next).find(
+      (c) => c.distanceKm !== null,
+    );
+    if (closest) onChange(closest.id);
+    setMessage(
+      label
+        ? "Search area selected. Showing recycling centers around that address, not your device location."
+        : closest
+          ? "Location found. The nearest listed center is selected; you can choose another."
+          : latestCenters.current.length
+            ? "These centers do not have coordinates yet. Please choose a center manually."
+            : "Location found. Looking for nearby recycling centers on Google Maps.",
+    );
   }
   function locate() {
     if (!window.isSecureContext || !navigator.geolocation) {
       setMessage(
-        "Location is unavailable here. Use HTTPS or localhost, or choose your center below.",
+        "Location is unavailable here. Open localhost in Chrome or Safari, or search an address below.",
       );
       return;
     }
@@ -85,84 +111,90 @@ export default function CenterPicker({
     const id = request.current;
     setLocating(true);
     onLocatingChange(true);
-    setMessage("");
+    setMessage(
+      "Allow location in your browser if prompted. You can also search an address without GPS.",
+    );
     function finish() {
       if (pendingTimer.current) clearTimeout(pendingTimer.current);
       setLocating(false);
       onLocatingChange(false);
     }
-    // Browsers may keep a permission prompt open beyond getCurrentPosition's timeout.
+    const timedOut =
+      "Your browser took too long to return a location. If you are in VS Code’s preview, open localhost:3000 in Chrome or Safari, or search an address below.";
+    // The browser's own timeout can exclude time spent awaiting permission.
     pendingTimer.current = setTimeout(() => {
       if (id !== request.current) return;
       request.current++;
       finish();
-      setMessage(
-        "Finding your location took too long. Try again, or select a center manually.",
-      );
-    }, 20000);
-    try {
-      navigator.geolocation.getCurrentPosition(
-        (result) => {
-          if (id !== request.current) return;
+      setMessage(timedOut);
+    }, 40000);
+    function attempt(highAccuracy: boolean) {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (result) => {
+            if (id !== request.current) return;
+            request.current++;
+            finish();
+            const next = {
+              latitude: result.coords.latitude,
+              longitude: result.coords.longitude,
+            };
+            if (!validCoordinates(next)) {
+              setMessage(
+                "Your device returned an unavailable location. Search an address below.",
+              );
+              return;
+            }
+            applyPosition(
+              next,
+              Number.isFinite(result.coords.accuracy)
+                ? result.coords.accuracy
+                : null,
+            );
+          },
+          (error) => {
+            if (id !== request.current) return;
+            if (error.code !== 1 && !highAccuracy) {
+              setMessage(
+                "Trying another device location method. You can search an address now instead of waiting.",
+              );
+              attempt(true);
+              return;
+            }
+            request.current++;
+            finish();
+            setMessage(
+              error.code === 1
+                ? "Location permission was declined. Allow location for this browser in your browser and system settings, or search an address below."
+                : error.code === 3
+                  ? timedOut
+                  : "Your browser could not determine your location. Open the app in Chrome or Safari, or search an address below.",
+            );
+          },
+          {
+            enableHighAccuracy: highAccuracy,
+            maximumAge: 60000,
+            timeout: highAccuracy ? 20000 : 10000,
+          },
+        );
+      } catch {
+        if (id === request.current) {
+          request.current++;
           finish();
-          const next = {
-            latitude: result.coords.latitude,
-            longitude: result.coords.longitude,
-          };
-          if (!validCoordinates(next)) {
-            setMessage(
-              "Your device returned an unavailable location. Please choose a center manually.",
-            );
-            return;
-          }
-          setPosition(next);
-          setAccuracy(
-            Number.isFinite(result.coords.accuracy)
-              ? result.coords.accuracy
-              : null,
-          );
-          setQuery("");
-          const closest = rankCenters(latestCenters.current, next).find(
-            (center) => center.distanceKm !== null,
-          );
-          if (closest) {
-            onChange(closest.id);
-            setMessage(
-              "Location found. The nearest listed center is selected; you can choose another.",
-            );
-          } else
-            setMessage(
-              centers.length
-                ? "These centers do not have coordinates yet. Please choose a center manually."
-                : "Location found. Looking for nearby recycling centers on Google Maps.",
-            );
-        },
-        (error) => {
-          if (id !== request.current) return;
-          finish();
-          setMessage(
-            error.code === 1
-              ? "Location permission was declined. Choose a center below, or allow location in your browser and try again."
-              : error.code === 3
-                ? "Finding your location took too long. Try again, or select a center manually."
-                : "Your device could not find your location. Try again, or choose a center below.",
-          );
-        },
-        { enableHighAccuracy: true, maximumAge: 60000, timeout: 12000 },
-      );
-    } catch {
-      if (id === request.current) {
-        finish();
-        setMessage("Location is unavailable. Please choose a center below.");
+          setMessage("Location is unavailable. Search an address below.");
+        }
       }
     }
+    attempt(false);
   }
   function choose(id: string) {
     cancelRequest();
     onChange(id);
     setMessage(
       position
-        ? "Center selected. Distances are sorted from your last location."
+        ? positionLabel
+          ? "Center selected. Distances are sorted from your selected search area."
+          : "Center selected. Distances are sorted from your last location."
         : "Center selected. Your ticket will be assigned to this center.",
     );
   }
@@ -222,19 +254,31 @@ export default function CenterPicker({
           Map terms
         </a>
       </p>
+      <p className="location-status" role="status" aria-live="polite">
+        {message}
+      </p>
+      <LocationSearch
+        disabled={disabled}
+        onStart={() => {
+          cancelRequest();
+          setMessage("");
+        }}
+        onSelect={(next, label) => {
+          cancelRequest();
+          applyPosition(next, null, label);
+        }}
+      />
       {position && (
         <GoogleCenterMap
           position={position}
           accuracy={accuracy}
+          positionLabel={positionLabel}
           centers={centers}
           selected={value}
           disabled={disabled}
           onSelect={choose}
         />
       )}
-      <p className="location-status" role="status" aria-live="polite">
-        {message}
-      </p>
       {position && nearest && nearest.distanceKm! > 50 && (
         <p className="location-warning">
           The closest listed center is{" "}

@@ -166,6 +166,45 @@ test("GPS timeout and unsupported browsers allow manual fallback", async ({
   ).toBeEnabled();
 });
 
+test("a timed-out coarse position retries once with high accuracy", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const options: PositionOptions[] = [];
+    (
+      window as unknown as { positionOptions: PositionOptions[] }
+    ).positionOptions = options;
+    navigator.geolocation.getCurrentPosition = (success, error, option) => {
+      options.push(option!);
+      if (options.length === 1) error!({ code: 3 } as GeolocationPositionError);
+      else
+        success({
+          coords: { latitude: 40.71451, longitude: -73.96141, accuracy: 20 },
+        } as GeolocationPosition);
+    };
+  });
+  await dropoff(page);
+  await page
+    .getByRole("button", { name: "Use my location", exact: true })
+    .click();
+  await expect(page.locator(".location-status")).toContainText(
+    "Location found",
+  );
+  await expect(
+    page.getByRole("radio", { name: "Williamsburg Demo Center", exact: true }),
+  ).toBeChecked();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { positionOptions: PositionOptions[] })
+          .positionOptions,
+    ),
+  ).toEqual([
+    { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 },
+    { enableHighAccuracy: true, maximumAge: 60000, timeout: 20000 },
+  ]);
+});
+
 test("manual choice overrides a pending location request and can clear location", async ({
   page,
   context,
@@ -233,9 +272,9 @@ test("far-away users are not told that sample centers are nearby", async ({
   await page
     .getByRole("button", { name: "Use my location", exact: true })
     .click();
-  await expect(page.locator(".center-picker > .location-warning")).toContainText(
-    "There may not be a participating center near you yet",
-  );
+  await expect(
+    page.locator(".center-picker > .location-warning"),
+  ).toContainText("There may not be a participating center near you yet");
   await expect(page.locator(".location-demo")).toContainText(
     "sample Brooklyn locations",
   );

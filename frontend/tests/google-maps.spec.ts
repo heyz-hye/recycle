@@ -75,13 +75,19 @@ async function setup(page: Page, centers: unknown[] = [], mode = "success") {
         attributions: [],
       });
       const Place = {
-        searchByText: async (request: unknown) => {
+        searchByText: async (request: { textQuery: string }) => {
           state.googleSearches.push(request);
           if (mode === "failure") throw new Error("REQUEST_DENIED");
           if (mode === "pending")
             return new Promise((resolve) => {
               state.finishSearch = resolve;
             });
+          if (request.textQuery !== "recycling center" && mode !== "empty")
+            return {
+              places: [
+                place("area", "Greenpoint, Brooklyn", 40.7305, -73.9544),
+              ],
+            };
           return {
             places:
               mode === "empty"
@@ -147,6 +153,100 @@ test.beforeEach(async ({ context }) => {
     accuracy: 20,
   });
 });
+
+test("address search works without GPS and Enter never submits a ticket", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = () => {
+      throw new Error("GPS must not be requested");
+    };
+  });
+  let claims = 0;
+  page.on("request", (r) => {
+    if (r.url().endsWith("/api/claims") && r.method() === "POST") claims++;
+  });
+  await setup(page);
+  await page
+    .getByLabel("Or search by address, neighborhood, or postal code")
+    .fill("Greenpoint, Brooklyn");
+  await page
+    .getByLabel("Or search by address, neighborhood, or postal code")
+    .press("Enter");
+  await expect(page.locator(".address-results button")).toHaveCount(1);
+  await expect(page.locator(".google-discovery")).toHaveCount(0);
+  await page.locator(".address-results button").click();
+  await expect(page.locator(".google-place-list li")).toHaveCount(2);
+  await expect(page.locator(".google-map-canvas")).toContainText("Area");
+  await expect(page.locator(".google-map-canvas")).not.toContainText("You");
+  await expect(page.locator(".google-discovery")).toContainText(
+    "not a detected device location",
+  );
+  expect(claims).toBe(0);
+  const queries = await page.evaluate(() =>
+    (
+      window as unknown as { googleSearches: { textQuery: string }[] }
+    ).googleSearches.map((r) => r.textQuery),
+  );
+  expect(queries).toEqual(["Greenpoint, Brooklyn", "recycling center"]);
+});
+
+test("selected address cancels pending GPS and ignores its late response", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = (success) => {
+      (window as unknown as { completeGPS: PositionCallback }).completeGPS =
+        success;
+    };
+  });
+  await setup(page);
+  await page
+    .getByRole("button", { name: "Use my location", exact: true })
+    .click();
+  await page
+    .getByLabel("Or search by address, neighborhood, or postal code")
+    .fill("Greenpoint, Brooklyn");
+  await page
+    .getByRole("button", { name: "Search location", exact: true })
+    .click();
+  await page.locator(".address-results button").click();
+  await expect(page.locator(".google-place-list li")).toHaveCount(2);
+  await page.evaluate(() =>
+    (window as unknown as { completeGPS: PositionCallback }).completeGPS({
+      coords: { latitude: 0, longitude: 0, accuracy: 20 },
+    } as GeolocationPosition),
+  );
+  await expect(page.locator(".google-map-canvas")).toContainText("Area");
+  await expect(page.locator(".location-status")).toContainText(
+    "Search area selected",
+  );
+  await expect(
+    page.getByRole("button", { name: "Update my location", exact: true }),
+  ).toBeEnabled();
+});
+
+for (const mode of ["failure", "empty"]) {
+  test(`address search ${mode} leaves device location available`, async ({
+    page,
+  }) => {
+    await setup(page, [], mode);
+    await page
+      .getByLabel("Or search by address, neighborhood, or postal code")
+      .fill("Greenpoint, Brooklyn");
+    await page
+      .getByRole("button", { name: "Search location", exact: true })
+      .click();
+    await expect(page.locator(".address-status")).toContainText(
+      mode === "empty"
+        ? "No matching location found"
+        : "Google address search is unavailable",
+    );
+    await expect(
+      page.getByRole("button", { name: "Use my location", exact: true }),
+    ).toBeEnabled();
+  });
+}
 
 test("Google discovery works with no registered centers and excludes unavailable or distant results", async ({
   page,

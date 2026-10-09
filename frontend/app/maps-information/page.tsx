@@ -14,6 +14,13 @@ export default function MapsInformation() {
           the distance estimates.
         </p>
         <p>
+          You can also search an address, neighborhood, or postal code without
+          sharing device location. Google receives the search text and returns
+          matching places. After you choose a result, the map searches around
+          that area; it is not a detected device location. Your search stays in
+          page memory and is not saved to your LoopMint account or database.
+        </p>
+        <p>
           Google Maps and Places receive your coordinates to display the map and
           search for nearby recycling locations. Google also receives the
           connection and browser information required to provide its services.

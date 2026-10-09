@@ -2477,3 +2477,64 @@ input[type="checkbox"] {
 .location-privacy a {
   text-decoration: underline;
 }
+.address-search {
+  margin: 18px 0 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f7f9f2;
+}
+.address-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.address-search-row input {
+  min-width: 0;
+  flex: 1;
+}
+.address-search-row .button {
+  flex-shrink: 0;
+}
+.address-status {
+  margin-top: 12px;
+}
+.address-results {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.address-results li {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+.address-results button {
+  border: 0;
+  padding: 0;
+  width: 100%;
+  background: transparent;
+  text-align: left;
+  color: var(--ink);
+}
+.address-results span {
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.google-text-attribution {
+  display: block;
+  font: 400 12px sans-serif;
+  color: #5e5e5e;
+  white-space: nowrap;
+  margin-top: 12px;
+}
+@media (max-width: 560px) {
+  .address-search-row {
+    flex-direction: column;
+  }
+}

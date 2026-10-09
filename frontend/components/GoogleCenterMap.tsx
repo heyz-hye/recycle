@@ -19,6 +19,7 @@ import {
 type Props = {
   position: Coordinates;
   accuracy: number | null;
+  positionLabel?: string | null;
   centers: Center[];
   selected: string;
   disabled: boolean;
@@ -27,6 +28,7 @@ type Props = {
 export default function GoogleCenterMap({
   position,
   accuracy,
+  positionLabel,
   centers,
   selected,
   disabled,
@@ -183,7 +185,12 @@ export default function GoogleCenterMap({
       if (click) value.addListener("click", click);
       markers.current.push(value);
     }
-    marker(origin, "Your current location", "You", "#2767bf");
+    marker(
+      origin,
+      positionLabel ? `Search area: ${positionLabel}` : "Your current location",
+      positionLabel ? "Area" : "You",
+      "#2767bf",
+    );
     if (accuracy !== null && accuracy >= 0)
       accuracyCircle.current = new google.maps.Circle({
         map: currentMap,
@@ -247,7 +254,17 @@ export default function GoogleCenterMap({
       });
       accuracyCircle.current?.setMap(null);
     };
-  }, [ready, places, centers, selected, position, accuracy, radius, active]);
+  }, [
+    ready,
+    places,
+    centers,
+    selected,
+    position,
+    accuracy,
+    radius,
+    active,
+    positionLabel,
+  ]);
 
   return (
     <section
@@ -256,7 +273,8 @@ export default function GoogleCenterMap({
     >
       <div className="google-map-heading">
         <h3>
-          <MapPin size={18} /> Recycling near you
+          <MapPin size={18} />{" "}
+          {positionLabel ? "Recycling near this area" : "Recycling near you"}
         </h3>
         <label>
           Search radius
@@ -277,11 +295,22 @@ export default function GoogleCenterMap({
       <div
         ref={canvas}
         className={`google-map-canvas ${ready || busy ? "" : "map-unavailable"}`}
-        aria-label="Map of your location and recycling centers"
+        aria-label={
+          positionLabel
+            ? "Map of selected area and recycling centers"
+            : "Map of your location and recycling centers"
+        }
       />
       <p className="google-map-legend">
-        Blue: your location · Numbers: Google results · L: LoopMint centers
+        Blue: {positionLabel ? "selected search area" : "your location"} ·
+        Numbers: Google results · L: LoopMint centers
       </p>
+      {positionLabel && (
+        <p className="small muted">
+          Searching around {positionLabel}. This is your selected area, not a
+          detected device location.
+        </p>
+      )}
       {busy && (
         <p role="status" className="small muted">
           Finding real recycling centers on Google Maps…
