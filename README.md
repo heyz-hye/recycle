@@ -1,2 +1,144 @@
-# recycle
-hacknight hackathon
+# LoopMint
+
+A recycling rewards MVP with a Next.js interface and Python/FastAPI backend. Recycling center staff confirm physical intake; the backend calculates funded token rewards from their measured quantities. No Gemini, AI verification, hosted posts, or community feed.
+
+## Run the local demo
+
+```bash
+./scripts/dev.sh
+```
+
+Open **http://localhost:3000**. The script installs project dependencies, uses Python 3.12 through `uv` (or an installed `python3.12`), and downloads a project-local Node 22 runtime if your installed Node is older. It starts the API, demo reward worker, and frontend. Requires npm and either uv or Python 3.12. Ctrl+C stops the services.
+
+The default demo needs no wallet, cloud account, API key, or Docker. SQLite data persists in `.data/loopmint.db`. It starts with three clearly labeled demo accounts and $500 of simulated funding. Tokens, burns, and payouts are **simulated**, not blockchain transactions. Signing in with an actual wallet while in demo mode still uses the simulated token service.
+
+1. Enter the recycler demo. Create a drop-off for 2 kg of cardboard and copy the QR ticket code.
+2. Switch **Demo view → Center staff**. Scan or paste the ticket, enter the accepted quantity, and confirm physical receipt.
+3. Switch back to the recycler. Within a few seconds, 40 LOOP appears as received. Center approval and transaction confirmation have separate states.
+4. Open **Share** to edit the generated caption, use the device share action, or download the PNG card. Content is generated in the browser and published by the user on their own platform.
+5. Open **My wallet** for history and simulated redemption. Open **Funding partner** to add simulated funding and inspect reservations.
+
+API documentation: http://127.0.0.1:8000/docs.
+
+## What is implemented
+
+- Recycler, assigned center verifier, and funding partner roles, enforced by the API.
+- Wallet Standard sign-in with one-time Ed25519 challenges and HttpOnly session cookies. New wallets always receive recycler access. Trusted roles are provisioned with an operator command.
+- Plastic bottle counts and integer-gram cardboard submissions, unique expiring QR tickets, camera scanning where supported, manual code entry, and ticket renewal.
+- Physical receipt confirmation, measured quantities, partial acceptance, rejection reasons, center restrictions, and self-approval prevention.
+- Rate snapshots, separate verification/payment states, integer reward calculations, atomic funding reservations, waiting-for-funding processing, and idempotent approvals/deposits/redemptions.
+- A durable worker with signed-transaction persistence before broadcast, signature reconciliation, and duplicate-safe retries. Distinct rewards include unique on-chain memos even when amounts and wallets match.
+- A real Solana Devnet SPL minting/burn adapter plus an explicitly simulated local adapter.
+- Wallet reward/redemption history, Devnet explorer links for actual signatures, aggregate impact and funding dashboards, and five-second polling.
+- Browser-only share captions and PNG cards, editable previews, copy/download fallbacks, canceled sharing behavior, and no server-side social content.
+- PostgreSQL through Psycopg 3, local SQLite fallback, and an optional TimescaleDB hypertable/continuous aggregate migration.
+- Docker definitions, a local launch script, backend tests against SQLite or PostgreSQL, and desktop/mobile Playwright flows.
+
+## Configuration
+
+Copy `backend/.env.example` to the repository root as `.env`. Never commit keys or `.env`.
+
+| Setting | Purpose |
+| --- | --- |
+| `APP_MODE` | `demo` or `devnet`; demo accounts exist only in demo mode |
+| `DATABASE_URL` | SQLite file in demo; PostgreSQL required for Devnet |
+| `PUBLIC_ORIGIN` | Exact frontend origin permitted for browser mutations and wallet sign-in |
+| `SECURE_COOKIES` | Set `true` when served over HTTPS |
+| `DEMO_AUTO_WORKER` | In-process demo worker; disable when using the standalone worker |
+| `TIMESCALE_ENABLED` | Read the continuous aggregate after applying the Timescale migration |
+| `SOLANA_RPC_URL` | Devnet RPC; the adapter verifies the network genesis hash |
+| `SOLANA_MINT` | A classic SPL Token mint with exactly two decimals |
+| `SOLANA_ISSUER_KEYPAIR` | Server-side path to the mint authority/payer keypair JSON |
+
+`API_URL` is a **frontend build-time** setting for Next.js's `/api` proxy; defaults to `http://127.0.0.1:8000`. Browser requests remain same-origin. Keep the Python API behind that proxy or private networking when deployed.
+
+Use different databases for demo and Devnet. The database records its mode and refuses reuse across modes so simulated balances cannot become on-chain entitlements.
+
+## Solana Devnet setup
+
+The included adapter is implemented and tested with signed transactions and mocked RPC responses. **No live tokens have been issued by this checkout.** Actual issuance requires your PostgreSQL database, Devnet-funded issuer keypair, mint, and a user-controlled Devnet wallet. The issuer's Devnet SOL pays transaction fees and associated token account rent.
+
+1. Configure a new PostgreSQL database, `APP_MODE=devnet`, your origin, and issuer keypair path. Fund the issuer with Devnet SOL. Keep the key outside this repository.
+2. Configure an existing compatible mint, or run the following explicit command to create one:
+
+   ```bash
+   PYTHONPATH=backend .venv/bin/python -m app.cli create-devnet-mint
+   ```
+
+   Put the printed mint address in `SOLANA_MINT`. The configured issuer must be its mint authority. Mint decimals are fixed at 2.
+3. Provision trusted wallets from your server:
+
+   ```bash
+   PYTHONPATH=backend .venv/bin/python -m app.cli grant-role \
+     --wallet YOUR_CENTER_WALLET --username 'Center staff' \
+     --role verifier --center greenpoint
+
+   PYTHONPATH=backend .venv/bin/python -m app.cli grant-role \
+     --wallet YOUR_PARTNER_WALLET --username 'Funding partner' \
+     --role funding_partner
+   ```
+
+4. Start the API/frontend with `./scripts/dev.sh`. Start the separate worker in another terminal:
+
+   ```bash
+   PYTHONPATH=backend .venv/bin/python -m app.worker
+   ```
+
+5. Sign in with each wallet; fund the simulated reward budget as the partner. Submit recycling as a recycler, then confirm as center staff. The worker mints Devnet tokens to the recycler's associated token account and waits for network confirmation.
+
+Devnet redemption prepares an exact burn transaction. The user authorizes it in their wallet; the API verifies its confirmed message, mint, amount, signer, and unique redemption memo before recording simulated credit. A pending redemption reserves its balance. If wallet submission was interrupted, recover the transaction signature from wallet history and use **Resume** to reconcile it. An expired unsigned burn or a confirmed failure requires operator reconciliation; the application never silently releases an uncertain burn or creates a replacement transaction.
+
+## Storage, money, and retries
+
+Bottles earn 5 LOOP each; cardboard earns 20 LOOP/kg. The token base unit is 0.01 LOOP. Store grams and base units as integers. The configured rates produce exact integer results; reward calculation floors division. Reserve demo cents **upward** to cover fractional LOOP. Redemptions accept whole LOOP only, at 1 LOOP = 1 simulated cent.
+
+All authoritative writes use a transaction. PostgreSQL uses a shared transaction-scoped advisory lock across API and worker; SQLite uses `BEGIN IMMEDIATE`. This deliberately serializes writes for the one-center MVP. Unique constraints additionally enforce one verification, reward, and job per claim. For higher traffic, replace the global lock with a consistent row-lock order after load testing.
+
+The worker commits signed bytes, signature, and last valid block height before broadcasting. A lost network response causes reconciliation of the same signature; retries rebroadcast identical bytes. Failed/expired transactions are marked `needs_review` and keep funding reserved. Operators must check the stored signature on Devnet before recovery; no automatic re-mint occurs. Inspect `reward_jobs.last_error` and the worker logs. This is intentionally conservative around uncertain transactions.
+
+## PostgreSQL and TimescaleDB
+
+To run a full local PostgreSQL stack, with Docker running:
+
+```bash
+docker compose up --build
+```
+
+The frontend and API bind to loopback. Compose starts a separate worker and a persistent database volume. Demo credentials in Compose are for this local stack only.
+
+For Tiger Cloud / TimescaleDB, set `DATABASE_URL`, initialize the database, then run:
+
+```bash
+PYTHONPATH=backend .venv/bin/python -m app.cli enable-timescale
+```
+
+Set `TIMESCALE_ENABLED=true` and restart the API. The migration makes `recycling_events` an integer-time hypertable, installs an hourly aggregate by center/material/event type, enables real-time aggregation, and schedules refreshes. Claims, funding, and rewards stay ordinary PostgreSQL tables. Dashboard totals count intake independently of reward events. PostgreSQL tests run without the Timescale extension; the optional Timescale migration needs validation on your target Tiger Cloud instance.
+
+## Tests
+
+```bash
+PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
+
+# Optional: the fixture creates and removes an isolated test schema for each case.
+TEST_DATABASE_URL=postgresql://USER:PASSWORD@localhost/loopmint_test \
+  PYTHONPATH=backend .venv/bin/python -m pytest backend/tests -q
+
+cd frontend
+npm run typecheck
+npm run build
+npx playwright install chromium
+# With the local demo running:
+npm run test:e2e
+```
+
+Use Node 22+ for npm commands, or prepend `.tools/node_modules/node/bin` to `PATH` after the launch script has installed its local runtime. Browser tests create demo claims and funding records; run them against a demo database. They cover desktop and mobile layouts, submission/approval/reward flow, PNG downloads, share cancellation/fallbacks, simulated redemption, funding, and rejection.
+
+## Deployment and remaining setup
+
+Deploy the frontend, API, and worker as separate services using their Dockerfiles (the worker overrides the backend command with `python -m app.worker`). Set the frontend's `API_URL` build argument to the API's reachable private address. Set `PUBLIC_ORIGIN` to the frontend HTTPS URL and `SECURE_COOKIES=true`; use PostgreSQL, Devnet mode, and server-only issuer secrets. Configure external rate limits before opening wallet authentication to public traffic. The app includes a per-wallet challenge limit, not a distributed abuse-prevention service.
+
+Hosting, domain registration, cloud credentials, and a real funding agreement are not provisioned. Optional private photo uploads/R2 storage are not wired into the MVP: the implemented submission flow uses materials and quantities, with physical center verification. No claim is automatically approved from a photo or QR scan.
+
+Requirements: [MVP_PLAN.md](MVP_PLAN.md). Revised planning document: [PDF](output/pdf/Recycling_Rewards_MVP_Center_Verified.pdf).
+
+Implementation references: [Next.js installation](https://nextjs.org/docs/app/getting-started/installation), [Psycopg transactions](https://www.psycopg.org/psycopg3/docs/basic/transactions.html), [Solana.py SPL instructions](https://michaelhly.com/solana-py/spl/token/instructions/), [Timescale continuous aggregates](https://www.tigerdata.com/docs/learn/continuous-aggregates).
