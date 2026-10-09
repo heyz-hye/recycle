@@ -2,14 +2,39 @@ CREATE TABLE IF NOT EXISTS app_metadata (key TEXT PRIMARY KEY, value TEXT NOT NU
 CREATE TABLE IF NOT EXISTS centers (
  id TEXT PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS center_locations (
+ center_id TEXT PRIMARY KEY REFERENCES centers(id),
+ latitude DOUBLE PRECISION NOT NULL CHECK(latitude BETWEEN -90 AND 90),
+ longitude DOUBLE PRECISION NOT NULL CHECK(longitude BETWEEN -180 AND 180),
+ is_demo BIGINT NOT NULL DEFAULT 0 CHECK(is_demo IN (0,1))
+);
 CREATE TABLE IF NOT EXISTS users (
  id TEXT PRIMARY KEY, wallet TEXT UNIQUE NOT NULL, username TEXT NOT NULL,
  role TEXT NOT NULL CHECK(role IN ('recycler','verifier','funding_partner')),
  center_id TEXT REFERENCES centers(id)
 );
+CREATE TABLE IF NOT EXISTS center_google_places (
+ center_id TEXT PRIMARY KEY REFERENCES centers(id), google_place_id TEXT UNIQUE NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sessions (
  token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires_at BIGINT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS account_credentials (
+ user_id TEXT PRIMARY KEY REFERENCES users(id),
+ email TEXT UNIQUE NOT NULL CHECK(email=lower(email)),
+ password_hash TEXT NOT NULL, created_at BIGINT NOT NULL, password_changed_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS staff_profiles (
+ user_id TEXT PRIMARY KEY REFERENCES users(id), job_title TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS funding_member_profiles (
+ user_id TEXT PRIMARY KEY REFERENCES users(id), organization TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS auth_attempts (
+ key_hash TEXT PRIMARY KEY, attempts BIGINT NOT NULL, expires_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS auth_attempt_expiry ON auth_attempts(expires_at);
+CREATE INDEX IF NOT EXISTS staff_job_location ON users(center_id, role);
 CREATE TABLE IF NOT EXISTS challenges (
  id TEXT PRIMARY KEY, wallet TEXT NOT NULL, message TEXT NOT NULL, expires_at BIGINT NOT NULL
 );

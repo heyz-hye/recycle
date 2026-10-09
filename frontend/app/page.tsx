@@ -34,6 +34,7 @@ import {
   Sprout,
   MoveUpRight,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -67,6 +68,8 @@ import { wallets, loginWallet, signBurn } from "@/lib/wallet";
 import Modal from "@/components/Modal";
 import Share from "@/components/Share";
 import Scanner from "@/components/Scanner";
+import CenterPicker from "@/components/CenterPicker";
+import { AccountLogin, AccountDetails } from "@/components/Account";
 
 type Page = "overview" | "dropoff" | "wallet" | "impact" | "review" | "funding";
 const names: Record<Page, string> = {
@@ -138,6 +141,8 @@ function Empty({ title, children }: { title: string; children: ReactNode }) {
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [mode, setMode] = useState("");
+  const [demoAccounts, setDemoAccounts] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [ready, setReady] = useState(false);
   const [page, setPage] = useState<Page>("overview");
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -160,7 +165,7 @@ export default function Home() {
   const demo = mode === "demo";
   useEffect(() => {
     Promise.all([
-      api<{ mode: string }>("/health"),
+      api<{ mode: string; demo_accounts_enabled: boolean }>("/health"),
       api<User>("/auth/me").catch((e) => {
         if (e instanceof ApiError && e.status === 401) return null;
         throw e;
@@ -168,6 +173,7 @@ export default function Home() {
     ])
       .then(([health, account]) => {
         setMode(health.mode);
+        setDemoAccounts(health.demo_accounts_enabled);
         setUser(account);
       })
       .catch((e) => setError(e.message))
@@ -231,6 +237,7 @@ export default function Home() {
   }
   function signedIn(u: User) {
     generation.current++;
+    setMobileNav(false);
     setUser(u);
     setClaims([]);
     setWallet(null);
@@ -243,6 +250,7 @@ export default function Home() {
           : "overview",
     );
     setShowConnect(false);
+    setShowAccount(false);
     setTicket(null);
     setSelected(null);
     setShare(null);
@@ -410,8 +418,9 @@ export default function Home() {
               Turn your everyday recycling into something rewarding. Bring it
               in, get it confirmed, and make your impact count.
             </p>
+            <AccountLogin onLogin={signedIn} />
             <div className="login-actions">
-              {demo && (
+              {demoAccounts && (
                 <button
                   className="button primary"
                   disabled={busy}
@@ -428,7 +437,7 @@ export default function Home() {
                 <Wallet size={18} /> Connect wallet
               </button>
             </div>
-            {demo && (
+            {demoAccounts && (
               <div className="demo-links">
                 <span>Explore another role</span>
                 <button disabled={busy} onClick={() => demoLogin("verifier")}>
@@ -548,6 +557,15 @@ export default function Home() {
           </div>
           <button
             className="signout"
+            onClick={() => {
+              setShowAccount(true);
+              setMobileNav(false);
+            }}
+          >
+            <UserRound size={18} /> My account
+          </button>
+          <button
+            className="signout"
             disabled={busy}
             onClick={() =>
               action(async () => {
@@ -583,7 +601,7 @@ export default function Home() {
             <strong>{names[page]}</strong>
           </div>
           <div className="topbar-right">
-            {demo && (
+            {demoAccounts && user.wallet.startsWith("demo:") && (
               <label className="role-switch">
                 <span>DEMO VIEW</span>
                 <select
@@ -593,7 +611,13 @@ export default function Home() {
                   onChange={(e) => demoLogin(e.target.value)}
                 >
                   <option value="recycler">Recycler</option>
-                  <option value="verifier">Center staff</option>
+                  <option value="verifier">Center staff · Greenpoint</option>
+                  <option value="verifier-williamsburg">
+                    Center staff · Williamsburg
+                  </option>
+                  <option value="verifier-downtown">
+                    Center staff · Downtown
+                  </option>
                   <option value="partner">Funding partner</option>
                 </select>
               </label>
@@ -835,7 +859,7 @@ export default function Home() {
               <PageHeading
                 eyebrow="CENTER WORKSPACE"
                 title="Good work starts here."
-                text="Inspect the materials, record the actual intake, and confirm the drop-off."
+                text={`${user.job_location || "Your assigned center"} · ${user.job_title || "Center staff"}. Inspect the materials, record the actual intake, and confirm the drop-off.`}
               />
               <div className="review-grid">
                 <TicketLookup
@@ -1255,7 +1279,21 @@ export default function Home() {
         />
       )}
       {showConnect && (
-        <Connect onClose={() => setShowConnect(false)} onLogin={signedIn} />
+        <Connect
+          link={!!user.email}
+          onClose={() => setShowConnect(false)}
+          onLogin={signedIn}
+        />
+      )}
+      {showAccount && (
+        <AccountDetails
+          user={user}
+          onClose={() => setShowAccount(false)}
+          onWallet={() => {
+            setShowAccount(false);
+            setShowConnect(true);
+          }}
+        />
       )}
       {showRedeem && wallet && (
         <Redeem
@@ -1304,6 +1342,9 @@ function Dropoff({
   const [bottles, setBottles] = useState("");
   const [cardboard, setCardboard] = useState("");
   const [center, setCenter] = useState("greenpoint");
+  const [locating, setLocating] = useState(false);
+  const selectedCenter =
+    centers.find((c) => c.id === center)?.id || centers[0]?.id || "";
   const [error, setError] = useState("");
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -1325,7 +1366,11 @@ function Dropoff({
       return;
     }
     setError("");
-    onSubmit({ center_id: center, items });
+    if (!selectedCenter || locating) {
+      setError("Choose a center or wait for the location search to finish.");
+      return;
+    }
+    onSubmit({ center_id: selectedCenter, items });
   }
   return (
     <div className="form-grid">
@@ -1383,22 +1428,13 @@ function Dropoff({
             <span>kg</span>
           </div>
         </div>
-        <label htmlFor="center">Your recycling center</label>
-        <select
-          id="center"
-          value={center}
-          onChange={(e) => setCenter(e.target.value)}
-          required
-        >
-          {centers.map((c) => (
-            <option value={c.id} key={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <p className="small muted">
-          <MapPin size={14} /> {centers.find((c) => c.id === center)?.address}
-        </p>
+        <CenterPicker
+          centers={centers}
+          value={selectedCenter}
+          onChange={setCenter}
+          disabled={busy}
+          onLocatingChange={setLocating}
+        />
         <div className="estimate">
           <span>Estimated reward</span>
           <strong>
@@ -1417,7 +1453,7 @@ function Dropoff({
         )}
         <button
           className="button primary full"
-          disabled={busy || !centers.length}
+          disabled={busy || !selectedCenter || locating}
           type="submit"
         >
           {busy ? "Creating your ticket…" : "Create drop-off ticket"}
@@ -1816,9 +1852,11 @@ function ImpactChart({ impact }: { impact: Impact | null }) {
 function Connect({
   onClose,
   onLogin,
+  link = false,
 }: {
   onClose: () => void;
   onLogin: (u: User) => void;
+  link?: boolean;
 }) {
   const [username, setUsername] = useState("Recycler");
   const [available, setAvailable] = useState<ReturnType<typeof wallets>>([]);
@@ -1832,16 +1870,20 @@ function Connect({
   return (
     <Modal title="Connect your wallet" onClose={onClose}>
       <p className="muted">
-        Choose a Solana Devnet wallet. You’ll sign a one-time message to
-        securely sign in.
+        Choose a Solana Devnet wallet. You’ll sign a one-time message to{" "}
+        {link ? "link it to your existing account." : "securely sign in."}
       </p>
-      <label htmlFor="wallet-username">Display name (new wallets)</label>
-      <input
-        id="wallet-username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        maxLength={40}
-      />
+      {!link && (
+        <>
+          <label htmlFor="wallet-username">Display name (new wallets)</label>
+          <input
+            id="wallet-username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            maxLength={40}
+          />
+        </>
+      )}
       {available.length ? (
         available.map((w) => (
           <button
@@ -1852,7 +1894,9 @@ function Connect({
               setBusy(true);
               setError("");
               try {
-                onLogin(await loginWallet(w, username.trim() || "Recycler"));
+                onLogin(
+                  await loginWallet(w, username.trim() || "Recycler", link),
+                );
               } catch (e) {
                 setError(
                   e instanceof Error ? e.message : "Wallet connection failed.",

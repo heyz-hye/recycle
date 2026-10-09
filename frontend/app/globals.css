@@ -288,6 +288,8 @@ input[type="checkbox"] {
   padding: 31px 22px 20px;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 30;
 }
 .sidebar .brand {
@@ -1659,6 +1661,7 @@ input[type="checkbox"] {
   }
   .role-switch select {
     font-size: 10px;
+    max-width: 150px;
   }
   .form-grid {
     grid-template-columns: 1fr;
@@ -2087,4 +2090,390 @@ input[type="checkbox"] {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Location-aware center selection. All device coordinates stay in browser memory. */
+.center-picker {
+  margin-top: 28px;
+  padding-top: 25px;
+  border-top: 1px solid var(--line);
+}
+.center-picker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.center-picker-heading .eyebrow {
+  font-size: 8px;
+  margin-bottom: 7px;
+}
+.center-picker-heading h3 {
+  font-size: 18px;
+}
+.center-picker-heading > svg {
+  color: #789261;
+}
+.location-actions {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  margin: 17px 0 10px;
+}
+.location-actions .button {
+  font-size: 12px;
+}
+.location-privacy {
+  font-size: 10px;
+  color: #839078;
+  line-height: 1.7;
+  margin: 10px 0;
+}
+.location-status {
+  color: #4f6e43;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.location-status:not(:empty) {
+  margin: 14px 0;
+}
+.location-demo,
+.location-warning {
+  color: #876b34;
+  font-size: 11px;
+  padding: 11px 13px;
+  border-radius: 7px;
+  background: #faf5e7;
+  margin: 12px 0;
+  line-height: 1.7;
+}
+.center-search {
+  position: relative;
+}
+.center-search > svg {
+  position: absolute;
+  left: 12px;
+  top: 14px;
+  color: #8b987c;
+}
+.center-search > input {
+  padding-left: 36px;
+  font-size: 12px;
+}
+.center-options {
+  padding: 0;
+  margin: 15px 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 330px;
+  overflow-y: auto;
+}
+.center-option {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e4e9dd;
+  border-radius: 9px;
+  margin: 0;
+  cursor: pointer;
+  background: white;
+  font-weight: 400;
+}
+.center-option:hover,
+.center-option.chosen {
+  background: #f3f7ed;
+  border-color: #9caf7f;
+}
+.center-option > input {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  accent-color: var(--forest);
+}
+.center-option-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.center-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.center-address {
+  font-size: 10px;
+  color: #7d8b72;
+  line-height: 1.5;
+}
+.center-distance {
+  font-size: 11px;
+  color: #597547;
+  margin-top: 2px;
+}
+.nearest-label {
+  font-weight: 500;
+  font-size: 9px;
+  border-radius: 4px;
+  padding: 3px 6px;
+  color: #4e7542;
+  background: #e2eccf;
+}
+.selected-center {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #f7f9f2;
+  border-radius: 7px;
+}
+.selected-center > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+.selected-center .text-button {
+  font-size: 10px;
+}
+@media (max-width: 560px) {
+  .center-option {
+    padding: 12px;
+  }
+  .center-name {
+    font-size: 11px;
+  }
+  .location-actions .button {
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+}
+.account-login {
+  max-width: 460px;
+  margin: 28px 0 20px;
+  padding: 24px;
+  border: 1px solid var(--line, #dce3d7);
+  border-radius: 18px;
+  background: #fff;
+}
+.account-login h2 {
+  font-size: 22px;
+  margin: 0 0 8px;
+}
+.account-login > p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.account-login fieldset,
+.password-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.account-login label,
+.password-form label {
+  display: block;
+  margin: 15px 0 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.account-login input,
+.password-form input {
+  width: 100%;
+}
+.account-login .button {
+  margin-top: 18px;
+}
+.account-login > .text-button {
+  margin-top: 18px;
+  text-align: left;
+}
+.account-login .account-help {
+  margin: 18px 0 0;
+  font-size: 12px;
+}
+.account-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0 24px;
+}
+.account-identity h3,
+.account-identity p {
+  margin: 4px 0;
+}
+.account-fields {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 14px;
+  margin: 24px 0;
+  font-size: 14px;
+}
+.account-fields dt {
+  color: #76816f;
+}
+.account-fields dd {
+  margin: 0;
+}
+.account-fields small {
+  display: block;
+  margin-top: 6px;
+  color: #76816f;
+}
+.account-wallet {
+  overflow-wrap: anywhere;
+}
+.password-form {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #dce3d7;
+}
+.password-form h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.password-form .button {
+  margin-top: 12px;
+}
+.google-discovery {
+  margin: 22px 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.google-map-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.google-map-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.google-map-heading label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin: 0;
+}
+.google-map-heading select {
+  width: auto;
+  padding: 8px;
+}
+.google-map-canvas {
+  height: 340px;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #edf1e8;
+}
+.google-map-canvas.map-unavailable {
+  display: none;
+}
+.google-map-legend {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 10px 0;
+}
+.google-pin {
+  display: block;
+  padding: 7px 10px;
+  border: 2px solid white;
+  border-radius: 20px;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px #0004;
+}
+.google-place-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: grid;
+  gap: 10px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+.google-place-list li {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+}
+.google-place-list li.active {
+  border-color: #789b54;
+  background: #f2f6ea;
+}
+.google-place-title {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+}
+.google-place-title > span {
+  padding: 3px 8px;
+  border-radius: 50%;
+  background: #edf1e8;
+}
+.google-place-list p {
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.google-attribution {
+  display: block;
+  font-size: 10px;
+  margin-top: 7px;
+}
+.participating-title {
+  margin: 20px 0 12px;
+}
+@media (max-width: 560px) {
+  .google-map-canvas {
+    height: 280px;
+  }
+}
+.maps-information {
+  max-width: 760px;
+  margin: 50px auto;
+  padding: 0 24px 50px;
+}
+.maps-information h1 {
+  margin: 32px 0;
+}
+.maps-information section {
+  margin: 32px 0;
+  scroll-margin-top: 24px;
+}
+.maps-information p {
+  margin: 14px 0;
+  line-height: 1.8;
+}
+.maps-information a,
+.location-privacy a {
+  text-decoration: underline;
 }

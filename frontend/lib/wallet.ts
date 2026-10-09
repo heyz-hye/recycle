@@ -22,6 +22,7 @@ export function wallets() {
 export async function loginWallet(
   wallet: Wallet,
   username = "Recycler",
+  link = false,
 ): Promise<User> {
   const feature = wallet.features as StandardConnectFeature &
     SolanaSignMessageFeature;
@@ -37,7 +38,7 @@ export async function loginWallet(
     account,
     message: new TextEncoder().encode(challenge.message),
   });
-  const user = await api<User>("/auth/verify", {
+  const user = await api<User>(link ? "/auth/link-wallet" : "/auth/verify", {
     challenge_id: challenge.challenge_id,
     signature: getBase58Decoder().decode(result.signature),
     username,

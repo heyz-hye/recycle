@@ -13,26 +13,53 @@ def seed(c):
         "INSERT INTO app_metadata VALUES ('mode', ?) ON CONFLICT DO NOTHING", (mode,)
     )
     c.execute(
-        "INSERT INTO centers VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
-        (
-            "greenpoint",
-            "Greenpoint Recycling Center",
-            "Greenpoint, Brooklyn · Mon–Sat, 9am–5pm",
-        ),
-    )
-    c.execute(
         "INSERT INTO reward_rules VALUES ('bottles','count',500,1) ON CONFLICT DO NOTHING"
     )
     c.execute(
         "INSERT INTO reward_rules VALUES ('cardboard','grams',2000,1000) ON CONFLICT DO NOTHING"
     )
     c.execute("INSERT INTO funding_account (id) VALUES ('main') ON CONFLICT DO NOTHING")
-    if get_settings().app_mode != "demo":
+    if mode != "demo" or not get_settings().demo_accounts_enabled:
         return
+    # Example neighborhood coordinates, not verified public drop-off facilities.
+    # Never seed these locations into a Devnet/production database.
+    for center_id, name, address, latitude, longitude in [
+        (
+            "greenpoint",
+            "Greenpoint Recycling Center",
+            "Greenpoint, Brooklyn · Demo location",
+            40.7305,
+            -73.9544,
+        ),
+        (
+            "williamsburg",
+            "Williamsburg Demo Center",
+            "Williamsburg, Brooklyn · Demo location",
+            40.7145,
+            -73.9614,
+        ),
+        (
+            "downtown",
+            "Downtown Brooklyn Demo Center",
+            "Downtown Brooklyn · Demo location",
+            40.6925,
+            -73.9903,
+        ),
+    ]:
+        c.execute(
+            "INSERT INTO centers VALUES (?,?,?) ON CONFLICT DO NOTHING",
+            (center_id, name, address),
+        )
+        c.execute(
+            "INSERT INTO center_locations VALUES (?,?,?,1) ON CONFLICT DO NOTHING",
+            (center_id, latitude, longitude),
+        )
     for identity, name, role, center in [
         ("recycler", "Alex Morgan", "recycler", None),
         ("verifier", "Jamie Chen", "verifier", "greenpoint"),
         ("partner", "Green Future Fund", "funding_partner", None),
+        ("verifier-williamsburg", "Williamsburg Staff", "verifier", "williamsburg"),
+        ("verifier-downtown", "Downtown Staff", "verifier", "downtown"),
     ]:
         c.execute(
             "INSERT INTO users VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",

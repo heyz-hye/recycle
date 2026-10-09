@@ -5,6 +5,11 @@ export type User = {
   wallet: string;
   role: Role;
   center_id: string | null;
+  email: string | null;
+  job_location: string | null;
+  job_address: string | null;
+  job_title: string | null;
+  organization: string | null;
 };
 export type Item = {
   material: "bottles" | "cardboard";
@@ -73,7 +78,15 @@ export type Funding = {
     created_at: number;
   }[];
 };
-export type Center = { id: string; name: string; address: string };
+export type Center = {
+  id: string;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  is_demo: number;
+  google_place_id?: string | null;
+};
 export class ApiError extends Error {
   constructor(
     message: string,

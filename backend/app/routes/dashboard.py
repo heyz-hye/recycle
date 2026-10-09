@@ -10,10 +10,21 @@ from ..services import redemptions
 router = APIRouter()
 
 
+@router.get("/maps/config")
+def maps_config(user=Depends(current_user)):
+    cfg = get_settings()
+    # This is a referrer-restricted browser key, never a server credential.
+    return {"api_key": cfg.google_maps_browser_key, "map_id": cfg.google_maps_map_id}
+
+
 @router.get("/centers")
 def centers(user=Depends(current_user)):
     with transaction(write=False) as c:
-        return c.all("SELECT * FROM centers ORDER BY name")
+        return c.all(
+            "SELECT c.*, l.latitude, l.longitude, COALESCE(l.is_demo,0) AS is_demo, g.google_place_id "
+            "FROM centers c LEFT JOIN center_locations l ON l.center_id=c.id "
+            "LEFT JOIN center_google_places g ON g.center_id=c.id ORDER BY c.name"
+        )
 
 
 @router.get("/impact")
