@@ -98,9 +98,12 @@ export default function Assistant() {
       if (conversation.current !== current) return;
       setFailed(message);
       setError(
-        e instanceof ApiError
-          ? e.message
-          : "Couldn't reach the assistant. Check your connection and try again.",
+        !(e instanceof ApiError)
+          ? "Couldn't reach the assistant. Check your connection and try again."
+          : e.status === 422
+            ? // Validation text is written for developers, not people chatting.
+              "Something went wrong sending that message. Please try again or start a new chat."
+            : e.message,
       );
     } finally {
       if (conversation.current === current) {
