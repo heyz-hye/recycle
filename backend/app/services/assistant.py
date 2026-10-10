@@ -6,14 +6,22 @@ it is never taken from chat text, so one user can never read another's data.
 """
 
 from google.genai import types
+from solders.pubkey import Pubkey
+from solders.signature import Signature
 from ..config import get_settings
 from . import gemini_client
 from .common import now
-from ..schemas import NoArgs, PrepGuideArgs, EstimateRewardArgs, ImpactPeriodArgs
+from ..schemas import (
+    NoArgs,
+    PrepGuideArgs,
+    EstimateRewardArgs,
+    ImpactPeriodArgs,
+    LoopValueArgs,
+)
 
 MAX_TOOL_STEPS = 4
 
-SYSTEM_INSTRUCTION = (
+BASE_INSTRUCTION = (
     "You are LoopMint Assistant, a focused helper for the LoopMint recycling-rewards app. "
     "Only answer questions about: preparing bottles or cardboard for drop-off, estimating "
     "LOOP rewards, the signed-in user's own rewards and wallet, community recycling impact, "
@@ -21,8 +29,9 @@ SYSTEM_INSTRUCTION = (
     "You cannot approve claims, change reward amounts, or move funds — only center staff and "
     "the Python worker can do that; never imply otherwise. Reward estimates are estimates only; "
     "center staff determine the final accepted quantity and reward after physical inspection. "
-    "LOOP is a Solana Devnet demo token with no real monetary value; say so if asked about value. "
     "Use the provided tools to look up real data instead of guessing numbers. "
+    "When a reward is waiting, explain why using its waiting_reason (and funding_details for "
+    "specifics) in plain words; never quote internal error text. "
     "Formatting: reply in short Markdown. Put each list item on its own line using Markdown "
     "lists (numbered for counts or sequences, bullets otherwise). Never show reward IDs. "
     "Describe each reward by its claim ID shortened to the first 8 characters, its amount in "
@@ -30,6 +39,52 @@ SYSTEM_INSTRUCTION = (
     "\"Claim `af24f6f2`: 160 LOOP, awaiting funding\". "
     "Keep replies brief: answer the question, then stop."
 )
+
+
+def stable_label():
+    cfg = get_settings()
+    if cfg.app_mode == "demo":
+        return "simulated USDC"
+    return "Mock USD" if cfg.mock_usdc_enabled else "Devnet USDC"
+
+
+def system_instruction():
+    stable = stable_label()
+    if get_settings().app_mode == "demo":
+        mode = (
+            "This server runs in demo mode: every reward, conversion, and withdrawal is "
+            "simulated in the app's database. Nothing is sent to Solana and there are no "
+            "Explorer links; never claim that anything happened on-chain. "
+        )
+    else:
+        mode = (
+            "This server runs on Solana Devnet and LOOP is an SPL token there. A confirmed "
+            "reward is credited to the user's in-app LoopMint balance; tokens only move "
+            "on-chain when the user withdraws to their linked wallet from My wallet. "
+            "Withdrawals and government funding deposits are real Devnet transactions; share "
+            "an Explorer link only when a tool returns explorer_url. Converting LOOP to "
+            f"{stable} is an in-app ledger exchange, not an on-chain swap. "
+        )
+        if get_settings().mock_usdc_enabled:
+            mode += f"{stable} is a Devnet test token made for this demo; it is not Circle USDC. "
+    value = (
+        f"LOOP and {stable} are test tokens with no real-world monetary value. The app does "
+        "set an in-app conversion rate (remaining released government funding divided by "
+        "earned LOOP); share that rate when a tool provides it, and always add the "
+        "no-real-world-value disclaimer. "
+    )
+    return BASE_INSTRUCTION + " " + mode + value
+
+
+def explorer_url(signature):
+    # demo: and credit: signatures are ledger placeholders, never Solana transactions.
+    if get_settings().app_mode != "devnet" or not signature or ":" in signature:
+        return None
+    try:
+        Signature.from_string(signature)
+    except ValueError:
+        return None
+    return f"https://explorer.solana.com/tx/{signature}?cluster=devnet"
 
 PREP_GUIDES = {
     "bottles": {
@@ -94,27 +149,93 @@ def estimate_reward(c, user, args: EstimateRewardArgs):
     }
 
 
+REWARD_STATES = {
+    "awaiting_funding": "Approved by the center; waiting for funding before it can be credited.",
+    "queued": "Approved and funded; being credited to the in-app balance.",
+    "sent": "Approved and funded; being credited to the in-app balance.",
+    "confirmed": "Credited to the in-app LoopMint balance.",
+}
+
+WAITING_REASONS = {
+    "insufficient_budget": (
+        "The reward pool doesn't have enough released government funding yet. "
+        "It is credited automatically once funding arrives."
+    ),
+    "insufficient_loop": (
+        "The platform treasury doesn't hold enough LOOP yet. "
+        "It is credited automatically once the treasury is restocked."
+    ),
+    "treasury_unavailable": (
+        "The treasury couldn't be checked just now. It retries automatically."
+    ),
+}
+
+
+def reward_status(reward):
+    """Plain-words status for a reward row joined with custody, job and funding status."""
+    fallback = "internal" if get_settings().app_mode == "demo" else "external"
+    external = (reward["delivery"] or fallback) == "external"
+    result = {
+        "amount_loop": to_loop(reward["amount_base_units"]),
+        "state": reward["state"],
+        "meaning": REWARD_STATES[reward["state"]],
+        "explorer_url": None,
+    }
+    if reward["state"] == "confirmed":
+        if external:
+            # Older Devnet rewards were transferred straight to the wallet.
+            result["meaning"] = "Sent directly to the user's wallet on Solana Devnet (older reward)."
+            result["explorer_url"] = explorer_url(reward["signature"])
+        else:
+            result["meaning"] += (
+                " Nothing has moved on-chain yet; tokens only move on-chain when the "
+                "user withdraws from My wallet."
+            )
+    if reward["state"] == "awaiting_funding" and reward["funding_reason"]:
+        result["waiting_reason"] = WAITING_REASONS.get(
+            reward["funding_reason"], "It is waiting for funding and retries automatically."
+        )
+        result["funding_details"] = (reward["funding_message"] or "").replace(
+            "USDC", stable_label()
+        )
+    if reward["needs_review"]:
+        result["held_for_review"] = (
+            "An operator needs to review this reward before it can continue; "
+            "it is not retried automatically."
+        )
+    return result
+
+
+REWARD_DETAILS_SQL = (
+    "SELECT r.claim_id, r.amount_base_units, r.state, r.signature, r.created_at, "
+    "r.confirmed_at, d.delivery, j.needs_review, f.code AS funding_reason, "
+    "f.message AS funding_message FROM rewards r "
+    "LEFT JOIN reward_custody d ON d.reward_id=r.id "
+    "LEFT JOIN reward_jobs j ON j.reward_id=r.id "
+    "LEFT JOIN reward_funding_status f ON f.reward_id=r.id "
+)
+
+
 def get_my_rewards(c, user, args: NoArgs):
-    rewards = c.all(
-        "SELECT r.id, r.claim_id, r.amount_base_units, r.state, r.signature, r.created_at, "
-        "r.confirmed_at FROM rewards r WHERE r.user_id=? ORDER BY r.created_at DESC LIMIT 20",
+    rows = c.all(
+        REWARD_DETAILS_SQL + "WHERE r.user_id=? ORDER BY r.created_at DESC LIMIT 20",
         (user["id"],),
     )
-    for reward in rewards:
-        reward["amount_loop"] = to_loop(reward["amount_base_units"])
-        reward["explorer_url"] = (
-            f"https://explorer.solana.com/tx/{reward['signature']}?cluster=devnet"
-            if reward["state"] == "confirmed"
-            and reward["signature"]
-            and not reward["signature"].startswith("demo:")
-            else None
-        )
+    rewards = [
+        {
+            "claim_id": row["claim_id"],
+            "created_at": row["created_at"],
+            "confirmed_at": row["confirmed_at"],
+            **reward_status(row),
+        }
+        for row in rows
+    ]
     return {
         "rewards": rewards,
         "note": (
-            "Only rewards in the 'confirmed' state have actually been paid. "
-            "awaiting_funding, queued, and sent are not yet paid. "
-            "LOOP is a Solana Devnet demo token with no real monetary value."
+            "A confirmed reward is credited to the user's in-app LoopMint balance; it is "
+            "spendable there. Tokens only move on-chain when the user withdraws from My "
+            "wallet. awaiting_funding, queued, and sent rewards are not yet spendable."
         ),
     }
 
@@ -164,6 +285,211 @@ def list_centers(c, user, args: NoArgs):
     return {"centers": centers}
 
 
+CLAIM_STATES = {
+    "submitted": "Ticket created; waiting for center staff to scan it.",
+    "awaiting_review": "Ticket scanned at the center; waiting for staff to confirm intake.",
+    "verified": "Approved by center staff.",
+    "rejected": "Rejected by center staff.",
+}
+
+
+def item_summary(item):
+    def quantity(value):
+        if value is None:
+            return None
+        return value / 1000 if item["material"] == "cardboard" else value
+
+    return {
+        "material": item["material"],
+        "unit": "kg" if item["material"] == "cardboard" else "bottles",
+        "submitted": quantity(item["submitted_quantity"]),
+        "accepted": quantity(item["accepted_quantity"]),
+    }
+
+
+def get_my_claims(c, user, args: NoArgs):
+    # Ticket codes are bearer credentials for staff scanning, so they are never returned.
+    claims = c.all(
+        "SELECT c.id, c.status, c.ticket_expires_at, c.created_at, z.name AS center_name, "
+        "v.reason, v.confirmed_at FROM claims c JOIN centers z ON z.id=c.center_id "
+        "LEFT JOIN verifications v ON v.claim_id=c.id "
+        "WHERE c.user_id=? ORDER BY c.created_at DESC, c.id DESC LIMIT 10",
+        (user["id"],),
+    )
+    result = []
+    for claim in claims:
+        summary = {
+            "claim_id": claim["id"][:8],
+            "center": claim["center_name"],
+            "status": claim["status"],
+            "meaning": CLAIM_STATES[claim["status"]],
+            "created_at": claim["created_at"],
+            "decided_at": claim["confirmed_at"],
+            "items": [
+                item_summary(item)
+                for item in c.all(
+                    "SELECT material, submitted_quantity, accepted_quantity FROM claim_items "
+                    "WHERE claim_id=? ORDER BY material",
+                    (claim["id"],),
+                )
+            ],
+        }
+        if claim["status"] == "rejected":
+            summary["rejection_reason"] = claim["reason"]
+        if claim["status"] in ("submitted", "awaiting_review"):
+            summary["ticket_expired"] = claim["ticket_expires_at"] <= now()
+            if summary["ticket_expired"]:
+                summary["meaning"] = (
+                    "The ticket expired before staff confirmed it. Renew it from the "
+                    "drop-off to get a new QR code."
+                )
+        reward = c.one(REWARD_DETAILS_SQL + "WHERE r.claim_id=?", (claim["id"],))
+        if reward:
+            summary["reward"] = reward_status(reward)
+        result.append(summary)
+    return {
+        "claims": result,
+        "note": (
+            "Center staff decide accepted quantities after physical inspection, so accepted "
+            "can be lower than submitted. Center approval and reward crediting are separate steps."
+        ),
+    }
+
+
+WITHDRAWAL_STATES = {
+    "queued": "Requested; waiting to be signed and sent.",
+    "sent": "Sent to Solana Devnet; waiting for confirmation.",
+    "confirmed": "Confirmed on Solana Devnet.",
+    "review": (
+        "Held for operator review. The amount stays reserved and no replacement "
+        "transfer is sent."
+    ),
+}
+
+
+def asset_name(asset):
+    return stable_label() if asset == "USDC" else asset
+
+
+def short_address(wallet):
+    return f"{wallet[:4]}…{wallet[-4:]}"
+
+
+def linked_wallet(wallet):
+    try:
+        return short_address(wallet) if Pubkey.from_string(wallet).is_on_curve() else None
+    except ValueError:
+        return None
+
+
+def get_my_wallet(c, user, args: NoArgs):
+    from .assets import balances, DECIMALS
+
+    demo = get_settings().app_mode == "demo"
+
+    def amount(asset, units):
+        return units / 10 ** DECIMALS[asset]
+
+    withdrawals = c.all(
+        "SELECT asset, amount_base_units, state, signature, created_at, confirmed_at "
+        "FROM withdrawals WHERE user_id=? ORDER BY created_at DESC, id DESC LIMIT 10",
+        (user["id"],),
+    )
+    conversions = c.all(
+        "SELECT loop_base_units, asset, output_base_units, created_at FROM conversions "
+        "WHERE user_id=? ORDER BY created_at DESC, id DESC LIMIT 10",
+        (user["id"],),
+    )
+    return {
+        "network": "simulated" if demo else "solana:devnet",
+        "linked_wallet": linked_wallet(user["wallet"]),
+        "in_app_balances": [
+            {
+                "asset": asset_name(asset),
+                "available": amount(asset, row["available_base_units"]),
+                "pending_withdrawal": amount(asset, row["pending_base_units"]),
+            }
+            for asset, row in balances(c, user["id"]).items()
+        ],
+        "withdrawals": [
+            {
+                "asset": asset_name(w["asset"]),
+                "amount": amount(w["asset"], w["amount_base_units"]),
+                "state": w["state"],
+                "meaning": (
+                    "Simulated; no tokens were sent."
+                    if demo and w["state"] == "confirmed"
+                    else WITHDRAWAL_STATES[w["state"]]
+                ),
+                "explorer_url": explorer_url(w["signature"]),
+                "created_at": w["created_at"],
+                "confirmed_at": w["confirmed_at"],
+            }
+            for w in withdrawals
+        ],
+        "conversions": [
+            {
+                "loop": amount("LOOP", v["loop_base_units"]),
+                "received": amount(v["asset"], v["output_base_units"]),
+                "received_asset": asset_name(v["asset"]),
+                "created_at": v["created_at"],
+            }
+            for v in conversions
+        ],
+        "note": (
+            "In-app balances are held by LoopMint for the user. Only a withdrawal moves "
+            "tokens to the linked wallet"
+            + (
+                "; in demo mode withdrawals are simulated."
+                if demo
+                else " as a real Solana Devnet transaction."
+            )
+            + " Conversions are in-app exchanges, not on-chain swaps. Withdrawing needs "
+            "a linked wallet (My account)."
+        ),
+    }
+
+
+def get_loop_value(c, user, args: LoopValueArgs):
+    # Mirrors assets.quote() without writing a quote or fetching a SOL price.
+    from .assets import balances, fund_snapshot
+
+    snapshot = fund_snapshot(c)
+    fund, supply = snapshot["fund_usd_micros"], snapshot["supply_base_units"]
+    stable = stable_label()
+    available = balances(c, user["id"])["LOOP"]["available_base_units"]
+    result = {
+        "is_preview": True,
+        "asset": stable,
+        "remaining_released_funding": fund / 1000000,
+        "earned_loop_supply": to_loop(supply),
+        "your_available_loop": to_loop(available),
+    }
+    if not fund or not supply:
+        result["rate_available"] = False
+        result["note"] = (
+            "Conversion is unavailable right now: there is no remaining released funding "
+            "or no earned LOOP yet."
+        )
+        return result
+    loop_units = round(args.loop_amount * 100) if args.loop_amount else available
+    result["rate_available"] = True
+    result["value_per_loop"] = round(fund * 100 / supply / 1000000, 6)
+    result["preview"] = {
+        "loop": to_loop(loop_units),
+        "estimated_received": fund * loop_units // supply / 1000000,
+        "exceeds_your_available_loop": loop_units > available,
+    }
+    result["note"] = (
+        f"Preview only. Rate = remaining released funding / earned LOOP, rounded down, the "
+        "same formula a real quote uses. It changes whenever a ticket is approved or new "
+        "funding arrives. Converting in My wallet locks a quote for 60 seconds and also "
+        f"checks treasury liquidity. LOOP and {stable} are test tokens with no real-world "
+        "monetary value."
+    )
+    return result
+
+
 TOOLS = {
     "get_preparation_guide": (
         get_preparation_guide,
@@ -179,8 +505,28 @@ TOOLS = {
     "get_my_rewards": (
         get_my_rewards,
         NoArgs,
-        "Get the signed-in user's own reward claims and their real state "
-        "(awaiting_funding / queued / sent / confirmed), with explorer links for confirmed rewards.",
+        "Get the signed-in user's own rewards: amount, state in plain words, why any reward "
+        "is waiting for funding, and Explorer links only for real Devnet transactions.",
+    ),
+    "get_my_claims": (
+        get_my_claims,
+        NoArgs,
+        "Get the signed-in user's recent drop-off claims: center, status, submitted vs "
+        "accepted quantities, rejection reasons, expired tickets, and each reward's status "
+        "including why it is waiting. Use for 'why hasn't my reward arrived' questions.",
+    ),
+    "get_my_wallet": (
+        get_my_wallet,
+        NoArgs,
+        "Get the signed-in user's in-app balances (LOOP, the stable asset, SOL), linked "
+        "wallet, recent withdrawals with Explorer links for real Devnet transactions, and "
+        "recent LOOP conversions. Use for 'where are my tokens' or balance questions.",
+    ),
+    "get_loop_value": (
+        get_loop_value,
+        LoopValueArgs,
+        "Preview the in-app conversion rate of LOOP to the stable asset and what an amount "
+        "(default: the user's available LOOP) would convert to. Preview only; not a quote.",
     ),
     "get_community_impact": (
         get_community_impact,
@@ -215,7 +561,7 @@ def chat(c, user, message):
             "configured": False,
         }
     config = types.GenerateContentConfig(
-        system_instruction=SYSTEM_INSTRUCTION,
+        system_instruction=system_instruction(),
         tools=[types.Tool(function_declarations=_declarations())],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )

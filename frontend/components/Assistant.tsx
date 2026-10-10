@@ -8,10 +8,10 @@ import { api, ApiError, ChatReply } from "@/lib/api";
 type Message = { role: "user" | "assistant"; text: string };
 
 const CHIPS = [
-  "How do I prepare cardboard?",
-  "How much LOOP for 10 bottles?",
   "Where are my tokens?",
-  "Community impact this week",
+  "Show my last withdrawal on Solana",
+  "What's 1 LOOP worth?",
+  "Why is my reward pending?",
 ];
 
 // react-markdown never renders raw HTML from the model, so no sanitizer is needed.

@@ -163,6 +163,15 @@ class ImpactPeriodArgs(StrictModel):
     period: Literal["today", "week", "all"] = "week"
 
 
+class LoopValueArgs(StrictModel):
+    loop_amount: float = Field(
+        default=0,
+        ge=0,
+        le=10000000,
+        description="LOOP amount to preview; 0 means the user's available in-app LOOP.",
+    )
+
+
 class ConversionQuoteInput(StrictModel):
     loop_base_units: int = Field(gt=0, le=1000000000, strict=True)
     asset: Literal["USDC", "SOL"]
