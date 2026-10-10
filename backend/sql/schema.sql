@@ -135,3 +135,7 @@ CREATE TABLE IF NOT EXISTS funding_deposits (
  treasury TEXT NOT NULL, mint TEXT NOT NULL, slot BIGINT NOT NULL,
  actor_id TEXT REFERENCES users(id), created_at BIGINT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS conversion_quote_mints (
+ quote_id TEXT PRIMARY KEY REFERENCES conversion_quotes(id), mint TEXT NOT NULL
+);

@@ -66,3 +66,11 @@ Primary references: [Solana finalized transaction verification](https://solana.c
 Keep the demo database intact. Move only account credentials, role/workplace profiles, and registered center configuration into the Devnet database; do not copy simulated rewards, funding, conversions, or withdrawals into token entitlements. Users sign in again after switching. Use a single Devnet liability ledger per treasury wallet so two databases cannot independently reserve the same tokens. Existing simulated withdrawal records are not blockchain receipts.
 
 The API only creates rewards after an approved center verification, and the worker checks the stored confirmation again before processing. Approval credits the platform balance. The user's withdrawal request is the step that transfers treasury tokens to the linked wallet. Both the current withdrawal path and legacy reward preparation use SPL transfers, never minting. Demo withdrawal controls explicitly say “Simulate” and report that no tokens were sent.
+
+## Mock USD on Devnet
+
+For high-volume tests, configure `MOCK_USDC_ENABLED=true` and `SOLANA_USDC_MINT` with a separate classic SPL six-decimal mint. The UI labels it **Mock USD**, explicitly not Circle USDC. The Devnet genesis check remains enforced. The default remains Circle USDC with mock mode disabled. The backend continues to use `USDC` as the accounting asset key, but balances and transfers use only the explicitly configured mint.
+
+The switch excludes Circle funding receipts and prior Circle-funded conversion costs from the mock pool. Historical quotes retain their mint in `conversion_quote_mints`, and stale quotes from another mint cannot be executed. The server refuses a mint change after USDC conversions or withdrawals have been recorded, so token entitlements cannot silently change assets. LOOP accounting stays in the existing database and is not duplicated. SOL is still Devnet SOL.
+
+The operator can mint test inventory into the treasury and a separate government test wallet. Treasury bootstrap receipts must be verified like other incoming funding. Connecting a government wallet with mock tokens uses the same amount-box deposit flow and requires Devnet SOL for fees. Do not call this token Circle USDC or use it on Mainnet.

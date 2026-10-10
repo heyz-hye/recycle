@@ -360,7 +360,7 @@ def test_existing_loop_inventory_limits_rewards_and_conversion_releases_stock(
     monkeypatch.setattr(get_settings(), "app_mode", "devnet")
     with transaction() as c:
         c.execute(
-            "INSERT INTO funding_deposits VALUES ('verified-test',500000000,'treasury','usdc',1,NULL,1)"
+            "INSERT INTO funding_deposits VALUES ('verified-test',500000000,'treasury','4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',1,NULL,1)"
         )
         staff = c.one("SELECT * FROM users WHERE id='verifier'")
         confirm(c, claim["id"], staff, Confirmation(**APPROVE))
@@ -460,7 +460,7 @@ def test_treasury_unavailable_is_distinct_from_insufficient_funding(
 
     with transaction() as c:
         c.execute(
-            "INSERT INTO funding_deposits VALUES ('verified-test',500000000,'treasury','usdc',1,NULL,1)"
+            "INSERT INTO funding_deposits VALUES ('verified-test',500000000,'treasury','4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',1,NULL,1)"
         )
         staff = c.one("SELECT * FROM users WHERE id='verifier'")
         confirm(c, claim["id"], staff, Confirmation(**APPROVE))

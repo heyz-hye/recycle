@@ -13,6 +13,11 @@ def record_deposit(c, actor_id, signature):
     )
     existing = c.one("SELECT * FROM funding_deposits WHERE signature=?", (signature,))
     if existing:
+        require(
+            existing["mint"] == get_settings().solana_usdc_mint,
+            "This receipt belongs to a different funding token.",
+            409,
+        )
         return existing
     try:
         receipt = chain().verify_usdc_deposit(signature)
@@ -44,16 +49,22 @@ def summary(c):
 
     result = {
         "received_usdc_base_units": total(
-            c, "SELECT SUM(amount_base_units) AS n FROM funding_deposits"
+            c,
+            "SELECT SUM(amount_base_units) AS n FROM funding_deposits WHERE mint=?",
+            (get_settings().solana_usdc_mint,),
         ),
         "remaining_usdc_base_units": remaining_fund(c),
         "converted_usd_micros": total(
-            c, "SELECT SUM(usd_micros) AS n FROM conversions"
+            c,
+            "SELECT SUM(v.usd_micros) AS n FROM conversions v JOIN conversion_quote_mints m ON m.quote_id=v.quote_id WHERE m.mint=?",
+            (get_settings().solana_usdc_mint,),
         ),
         "distributed_loop_base_units": fund_snapshot(c)["supply_base_units"],
         "deposits": c.all(
-            "SELECT * FROM funding_deposits ORDER BY created_at DESC,signature LIMIT 100"
+            "SELECT * FROM funding_deposits WHERE mint=? ORDER BY created_at DESC,signature LIMIT 100",
+            (get_settings().solana_usdc_mint,),
         ),
+        "mock_usdc": get_settings().mock_usdc_enabled,
         "usdc_mint": get_settings().solana_usdc_mint,
         "treasury_address": None,
     }

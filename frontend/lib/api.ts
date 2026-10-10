@@ -75,6 +75,7 @@ export type Impact = {
 };
 export type Funding = {
   usdc?: {
+    mock_usdc?: boolean;
     received_usdc_base_units: number;
     remaining_usdc_base_units: number;
     converted_usd_micros: number;

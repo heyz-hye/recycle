@@ -12,6 +12,7 @@ export default function UsdcFundingForm({
   details: Funding["usdc"];
   onVerified: (funding: Funding) => void;
 }) {
+  const tokenLabel = details?.mock_usdc ? "Mock USD" : "USDC";
   const [amount, setAmount] = useState("100");
   const [walletList, setWalletList] = useState<
     ReturnType<typeof fundingWallets>
@@ -85,12 +86,18 @@ export default function UsdcFundingForm({
   }
   return (
     <section className="panel form-panel">
-      <h2>Deposit USDC funding</h2>
+      <h2>Deposit {tokenLabel} funding</h2>
       <p className="muted">
-        Release government funding into the platform’s USDC pool. Enter the
-        amount and approve the transfer in your wallet.
+        Release government funding into the platform’s {tokenLabel} pool. Enter
+        the amount and approve the transfer in your wallet.
       </p>
-      <span className="pill">Solana Devnet · Test USDC</span>
+      <span className="pill">Solana Devnet · {tokenLabel}</span>
+      {details?.mock_usdc && (
+        <p className="info-box">
+          Mock USD is a custom test token. It is not Circle USDC and has no
+          monetary value.
+        </p>
+      )}
       {error && (
         <p role="alert" className="error-text">
           {error}
@@ -146,7 +153,7 @@ export default function UsdcFundingForm({
             });
           }}
         >
-          <label htmlFor="usdc-deposit-amount">USDC amount</label>
+          <label htmlFor="usdc-deposit-amount">{tokenLabel} amount</label>
           <input
             id="usdc-deposit-amount"
             type="number"
@@ -195,14 +202,14 @@ export default function UsdcFundingForm({
             className="button primary full"
             disabled={busy || !details?.treasury_address || !walletList.length}
           >
-            {busy ? "Processing deposit…" : "Deposit USDC"}
+            {busy ? "Processing deposit…" : `Deposit ${tokenLabel}`}
           </button>
         </form>
       )}
       <p className="muted">
-        Your funding is added after the transfer is confirmed. One USDC provides
-        $1 of backing. LOOP supply is managed separately by the platform
-        operator.
+        Your funding is added after the transfer is confirmed. One {tokenLabel}{" "}
+        provides $1 of backing. LOOP supply is managed separately by the
+        platform operator.
       </p>
       {!pending && (
         <details>

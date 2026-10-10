@@ -173,6 +173,7 @@ export default function Home() {
   const [filter, setFilter] = useState("all");
   const generation = useRef(0);
   const demo = mode === "demo";
+  const fundingToken = funding?.usdc?.mock_usdc ? "Mock USD" : "USDC";
   useEffect(() => {
     Promise.all([
       api<{ mode: string; demo_accounts_enabled: boolean }>("/health"),
@@ -1101,13 +1102,13 @@ export default function Home() {
                 <div className="stats-grid four">
                   <Stat
                     label="Verified deposits"
-                    value={`${((funding?.usdc?.received_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`}
+                    value={`${((funding?.usdc?.received_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${fundingToken}`}
                     icon={<CircleDollarSign size={19} />}
                     note="Finalized treasury deposits"
                   />
                   <Stat
                     label="Available backing"
-                    value={`${((funding?.usdc?.remaining_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`}
+                    value={`${((funding?.usdc?.remaining_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${fundingToken}`}
                     icon={<Wallet size={19} />}
                     note="Deposits minus redeemed value"
                   />
@@ -1205,14 +1206,14 @@ export default function Home() {
                   <div className="panel-heading">
                     <h2>Funding activity</h2>
                     <span className="pill">
-                      {demo ? "Simulated funds" : "Devnet USDC"}
+                      {demo ? "Simulated funds" : `Devnet ${fundingToken}`}
                     </span>
                   </div>
                   {!demo && (
                     <>
                       <p className="muted">
-                        Only verified USDC deposits fund LOOP. Earlier manually
-                        entered dollar amounts are excluded.
+                        Only verified {fundingToken} deposits fund LOOP. Earlier
+                        manually entered dollar amounts are excluded.
                       </p>
                       {funding?.usdc?.deposits.map((d) => (
                         <div className="transaction-row" key={d.signature}>
@@ -1222,7 +1223,7 @@ export default function Home() {
                                 undefined,
                                 { maximumFractionDigits: 6 },
                               )}{" "}
-                              USDC received
+                              {fundingToken} received
                             </strong>
                             <p>{date(d.created_at)}</p>
                           </div>
