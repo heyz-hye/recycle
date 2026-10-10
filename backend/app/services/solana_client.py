@@ -95,6 +95,7 @@ class SolanaChain:
         if (
             get_settings().solana_usdc_mint
             != "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+            and not get_settings().mock_usdc_enabled
         ):
             raise ValueError("Only Circle's Solana Devnet USDC mint is supported.")
         mint = Pubkey.from_string(get_settings().solana_usdc_mint)
@@ -112,14 +113,141 @@ class SolanaChain:
             )
         if asset == "LOOP":
             account = get_associated_token_address(self.issuer.pubkey(), self.mint)
-            units = int(self.rpc.get_token_account_balance(account).value.amount)
+            units = self.token_account_balance(account)
             return units // 10 ** (self.loop_decimals - 2)
         if asset == "USDC":
             account = get_associated_token_address(
                 self.issuer.pubkey(), self.usdc_mint()
             )
-            return int(self.rpc.get_token_account_balance(account).value.amount)
+            return self.token_account_balance(account)
         raise ValueError("Unsupported treasury asset.")
+
+    def token_account_balance(self, account):
+        # A treasury that has never received this token has no associated account.
+        # Treat only a confirmed absent account as zero; RPC failures must propagate.
+        if self.rpc.get_account_info(account).value is None:
+            return 0
+        return int(self.rpc.get_token_account_balance(account).value.amount)
+
+    def prepare_funding_deposit(self, source_wallet, amount):
+        source = Pubkey.from_string(source_wallet)
+        if not source.is_on_curve() or source == self.issuer.pubkey():
+            raise ValueError(
+                "Choose the government funding wallet, not the platform treasury."
+            )
+        if not 0 < amount <= 1000000000000:
+            raise ValueError("Enter a USDC amount between 0.000001 and 1,000,000.")
+        mint = self.usdc_mint()
+        source_account = get_associated_token_address(source, mint)
+        if self.token_account_balance(source_account) < amount:
+            raise ValueError(
+                "The selected funding wallet does not have enough Devnet USDC."
+            )
+        instructions = [
+            create_idempotent_associated_token_account(
+                source, self.issuer.pubkey(), mint
+            ),
+            transfer_checked(
+                TransferCheckedParams(
+                    program_id=TOKEN_PROGRAM_ID,
+                    source=source_account,
+                    mint=mint,
+                    dest=get_associated_token_address(self.issuer.pubkey(), mint),
+                    owner=source,
+                    amount=amount,
+                    decimals=6,
+                )
+            ),
+        ]
+        block = self.rpc.get_latest_blockhash().value
+        tx = Transaction.new_unsigned(
+            Message.new_with_blockhash(instructions, source, block.blockhash)
+        )
+        return {
+            "transaction_b64": base64.b64encode(bytes(tx)).decode(),
+            "treasury_address": str(self.issuer.pubkey()),
+            "amount_base_units": amount,
+        }
+
+    def verify_usdc_deposit(self, signature):
+        try:
+            sig = Signature.from_string(signature)
+        except ValueError:
+            raise ValueError("Enter a valid Solana transaction signature.") from None
+        mint = str(self.usdc_mint())
+        treasury = str(self.issuer.pubkey())
+        account = str(
+            get_associated_token_address(self.issuer.pubkey(), Pubkey.from_string(mint))
+        )
+        response = self.rpc.get_transaction(
+            sig,
+            encoding="jsonParsed",
+            commitment="finalized",
+            max_supported_transaction_version=0,
+        )
+        result = json.loads(response.to_json())["result"]
+        if result is None:
+            raise ValueError(
+                "Deposit not finalized on Devnet yet. Wait a moment and retry."
+            )
+        meta = result.get("meta")
+        if not meta or meta.get("err") is not None:
+            raise ValueError("This transaction failed and cannot fund the pool.")
+        transaction = result["transaction"]
+        if (
+            not transaction.get("signatures")
+            or transaction["signatures"][0] != signature
+        ):
+            raise ValueError("The transaction signature does not match.")
+        keys = transaction["message"]["accountKeys"]
+        addresses = [k["pubkey"] for k in keys]
+        if account not in addresses:
+            raise ValueError(
+                "This transaction did not deposit USDC into this treasury."
+            )
+        index = addresses.index(account)
+
+        def amount(rows):
+            matches = [r for r in rows if r["accountIndex"] == index]
+            if not matches:
+                return 0
+            row = matches[0]
+            if (
+                row["mint"] != mint
+                or row.get("owner") != treasury
+                or row["uiTokenAmount"]["decimals"] != 6
+            ):
+                raise ValueError(
+                    "Deposit token or recipient does not match the USDC treasury."
+                )
+            return int(row["uiTokenAmount"]["amount"])
+
+        received = amount(meta.get("postTokenBalances", [])) - amount(
+            meta.get("preTokenBalances", [])
+        )
+
+        # A transfer between treasury-owned token accounts is not new funding.
+        def owned_total(rows):
+            return sum(
+                int(r["uiTokenAmount"]["amount"])
+                for r in rows
+                if r.get("owner") == treasury and r["mint"] == mint
+            )
+
+        net = owned_total(meta.get("postTokenBalances", [])) - owned_total(
+            meta.get("preTokenBalances", [])
+        )
+        received = min(received, net)
+        if not 0 < received <= 9000000000000000:
+            raise ValueError(
+                "This transaction has no new USDC funding for the treasury."
+            )
+        return {
+            "amount_base_units": received,
+            "treasury": treasury,
+            "mint": mint,
+            "slot": result["slot"],
+        }
 
     def check_payout(self, asset, amount):
         reserve = get_settings().treasury_fee_reserve_lamports

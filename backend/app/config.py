@@ -24,9 +24,17 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.8-flash"
     # Devnet-only payout assets. Set the official Circle Devnet USDC mint.
     solana_usdc_mint: str = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+    mock_usdc_enabled: bool = False
     treasury_fee_reserve_lamports: int = 10000000
 
     def validate_runtime(self):
+        if self.mock_usdc_enabled and (
+            self.app_mode != "devnet"
+            or self.solana_usdc_mint == "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+        ):
+            raise ValueError(
+                "Mock USD requires Devnet and a separate mock mint, never Circle USDC."
+            )
         parsed = urlsplit(self.database_url)
         if parsed.hostname and parsed.hostname.endswith(
             (".tigerdata.com", ".timescale.com")

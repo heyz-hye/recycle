@@ -27,6 +27,8 @@ export type Reward = {
   created_at: number;
   last_error?: string;
   needs_review?: number;
+  funding_reason?: string | null;
+  funding_message?: string | null;
 };
 export type Claim = {
   id: string;
@@ -72,6 +74,22 @@ export type Impact = {
   daily: { day: number; bottles: number; cardboard_grams: number }[];
 };
 export type Funding = {
+  usdc?: {
+    mock_usdc?: boolean;
+    received_usdc_base_units: number;
+    inventory_usdc_base_units?: number;
+    remaining_usdc_base_units: number;
+    converted_usd_micros: number;
+    distributed_loop_base_units: number;
+    treasury_address: string | null;
+    usdc_mint: string;
+    deposits: {
+      signature: string;
+      amount_base_units: number;
+      created_at: number;
+      is_inventory?: number;
+    }[];
+  };
   received_cents: number;
   available_cents: number;
   reserved_cents: number;
@@ -79,6 +97,10 @@ export type Funding = {
   redeemed_cents: number;
   pending_reimbursement_cents: number;
   awaiting_funding: number;
+  blocked_rewards?: Pick<
+    Reward,
+    "id" | "amount_base_units" | "funding_reason" | "funding_message"
+  >[];
   ledger: {
     id: string;
     kind: string;

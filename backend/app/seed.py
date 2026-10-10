@@ -19,6 +19,27 @@ def seed(c):
         "INSERT INTO reward_rules VALUES ('cardboard','grams',2000,1000) ON CONFLICT DO NOTHING"
     )
     c.execute("INSERT INTO funding_account (id) VALUES ('main') ON CONFLICT DO NOTHING")
+    # Historic quotes used Circle USDC; retain that identity through a mock switch.
+    circle = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+    c.execute(
+        "INSERT INTO conversion_quote_mints SELECT id,? FROM conversion_quotes WHERE 1=1 ON CONFLICT DO NOTHING",
+        (circle,),
+    )
+    if mode == "devnet":
+        bound = c.one("SELECT value FROM app_metadata WHERE key='usdc_mint'")
+        previous = bound["value"] if bound else circle
+        selected = get_settings().solana_usdc_mint
+        if previous != selected and (
+            c.one("SELECT COUNT(*) AS n FROM conversions WHERE asset='USDC'")["n"]
+            or c.one("SELECT COUNT(*) AS n FROM withdrawals WHERE asset='USDC'")["n"]
+        ):
+            raise ValueError(
+                "Cannot change the USDC mint after USDC conversions or withdrawals. Preserve the existing asset ledger."
+            )
+        c.execute(
+            "INSERT INTO app_metadata VALUES ('usdc_mint',?) ON CONFLICT (key) DO UPDATE SET value=excluded.value",
+            (selected,),
+        )
     # Existing Devnet rewards were delivered directly to wallets. Never credit
     # them to the new withdrawable platform balance a second time.
     c.execute(

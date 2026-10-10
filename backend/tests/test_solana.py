@@ -193,3 +193,85 @@ def test_existing_nine_decimal_loop_is_transferred_from_treasury():
         value=SimpleNamespace(amount="100000000000")
     )
     assert a.asset_balance("LOOP") == 10000  # 100 LOOP in app accounting units.
+
+
+@pytest.mark.parametrize("asset", ["LOOP", "USDC"])
+def test_missing_treasury_token_account_is_zero_not_rpc_failure(asset):
+    a = adapter()
+    a.loop_decimals = 9
+    a.usdc_mint = lambda: Keypair().pubkey()
+    a.rpc.get_account_info.return_value = SimpleNamespace(value=None)
+    assert a.asset_balance(asset) == 0
+    a.rpc.get_token_account_balance.assert_not_called()
+
+
+@pytest.mark.parametrize("asset", ["LOOP", "USDC"])
+def test_treasury_token_account_rpc_failure_is_not_zero_balance(asset):
+    a = adapter()
+    a.loop_decimals = 9
+    a.usdc_mint = lambda: Keypair().pubkey()
+    a.rpc.get_account_info.side_effect = RuntimeError("RPC unavailable")
+    with pytest.raises(RuntimeError, match="RPC unavailable"):
+        a.asset_balance(asset)
+    a.rpc.get_token_account_balance.assert_not_called()
+
+
+def test_existing_usdc_account_reads_exact_base_units():
+    a = adapter()
+    a.usdc_mint = lambda: Keypair().pubkey()
+    a.rpc.get_account_info.return_value = SimpleNamespace(value=object())
+    a.rpc.get_token_account_balance.return_value = SimpleNamespace(
+        value=SimpleNamespace(amount="20000000")
+    )
+    assert a.asset_balance("USDC") == 20000000
+
+
+@pytest.mark.parametrize("amount", [10123456, 10000000000])
+def test_government_funding_transaction_requires_sender_signature_and_exact_usdc(
+    amount,
+):
+    from spl.token.instructions import get_associated_token_address
+
+    a = adapter()
+    source = Keypair().pubkey()
+    mint = Keypair().pubkey()
+    a.usdc_mint = lambda: mint
+    a.token_account_balance = Mock(return_value=10000000000)
+    result = a.prepare_funding_deposit(str(source), amount)
+    tx = Transaction.from_bytes(base64.b64decode(result["transaction_b64"]))
+    assert tx.message.header.num_required_signatures == 1
+    assert tx.message.account_keys[0] == source
+    assert all(bytes(s) == bytes(64) for s in tx.signatures)
+    ix = tx.message.instructions[1]
+    assert ix.data[0] == 12
+    assert int.from_bytes(ix.data[1:9], "little") == amount
+    assert ix.data[9] == 6
+    keys = tx.message.account_keys
+    assert keys[ix.accounts[0]] == get_associated_token_address(source, mint)
+    assert keys[ix.accounts[2]] == get_associated_token_address(a.issuer.pubkey(), mint)
+    assert keys[ix.accounts[3]] == source
+    a.rpc.send_raw_transaction.assert_not_called()
+    a.token_account_balance.return_value = 0
+    with pytest.raises(ValueError, match="enough Devnet USDC"):
+        a.prepare_funding_deposit(str(source), amount)
+    with pytest.raises(ValueError, match="not the platform treasury"):
+        a.prepare_funding_deposit(str(a.issuer.pubkey()), 100)
+
+
+def test_custom_usd_mint_requires_explicit_mock_opt_in(monkeypatch):
+    from app.config import get_settings
+
+    a = adapter()
+    custom = Keypair().pubkey()
+    monkeypatch.setattr(get_settings(), "solana_usdc_mint", str(custom))
+    monkeypatch.setattr(get_settings(), "mock_usdc_enabled", False)
+    with pytest.raises(ValueError, match="Only Circle"):
+        a.usdc_mint()
+    monkeypatch.setattr(get_settings(), "mock_usdc_enabled", True)
+    token = Mock()
+    token.get_mint_info.return_value = SimpleNamespace(decimals=6)
+    monkeypatch.setattr("app.services.solana_client.Token", lambda *args: token)
+    assert a.usdc_mint() == custom
+    token.get_mint_info.return_value = SimpleNamespace(decimals=9)
+    with pytest.raises(ValueError, match="6 decimals"):
+        a.usdc_mint()

@@ -28,14 +28,29 @@ def remaining_fund(c):
         "SELECT received_cents,redeemed_cents FROM funding_account WHERE id='main'"
     )
     paid = total(c, "SELECT SUM(usd_micros) AS n FROM conversions")
+    if get_settings().app_mode == "devnet":
+        mint = get_settings().solana_usdc_mint
+        received = total(
+            c,
+            "SELECT SUM(d.amount_base_units) AS n FROM funding_deposits d WHERE d.mint=? AND NOT EXISTS (SELECT 1 FROM funding_inventory_receipts i WHERE i.signature=d.signature)",
+            (mint,),
+        )
+        paid = total(
+            c,
+            "SELECT SUM(v.usd_micros) AS n FROM conversions v JOIN conversion_quote_mints m ON m.quote_id=v.quote_id WHERE m.mint=?",
+            (mint,),
+        )
+        return max(0, received - paid)
     return max(0, (budget["received_cents"] - budget["redeemed_cents"]) * 10000 - paid)
 
 
 def fund_snapshot(c):
-    # Distributed through confirmed ticket rewards, including legacy external
-    # rewards. Wallet withdrawals remain outstanding; treasury inventory does not.
-    issued = total(
-        c, "SELECT SUM(amount_base_units) AS n FROM rewards WHERE state='confirmed'"
+    # Staff confirmation earns the reward, including amounts awaiting inventory
+    # or settlement. Those obligations must affect price before they are spendable.
+    # Wallet withdrawals remain outstanding; unallocated treasury stock is excluded.
+    earned = total(
+        c,
+        "SELECT SUM(r.amount_base_units) AS n FROM rewards r JOIN claims c ON c.id=r.claim_id WHERE c.status='verified'",
     )
     converted = total(c, "SELECT SUM(loop_base_units) AS n FROM conversions")
     burned = total(
@@ -43,7 +58,7 @@ def fund_snapshot(c):
     )
     return {
         "fund_usd_micros": remaining_fund(c),
-        "supply_base_units": max(0, issued - converted - burned),
+        "supply_base_units": max(0, earned - converted - burned),
     }
 
 
@@ -127,8 +142,10 @@ def overview(c, user_id):
             "SELECT id,asset,loop_base_units,output_base_units,usd_micros,created_at FROM conversions WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 100",
             (user_id,),
         ),
+        "mock_usdc": cfg.mock_usdc_enabled,
+        "usdc_mint": cfg.solana_usdc_mint,
         "network": "simulated" if cfg.app_mode == "demo" else "solana:devnet",
-        "supply_basis": "distributed",
+        "supply_basis": "earned_unredeemed",
         "withdrawals_configured": cfg.app_mode == "demo"
         or bool(cfg.solana_issuer_keypair and cfg.solana_mint),
     }
@@ -196,9 +213,14 @@ def quote(c, user, body):
     output = usd if body.asset == "USDC" else usd * 1000000000 // price
     require(usd > 0 and output > 0, "Amount is too small to convert.")
     require(output <= 9000000000000000, "Amount is too large to convert.")
+    available = treasury_available(c, body.asset)
+    decimals = 6 if body.asset == "USDC" else 9
+    scale = Decimal(10) ** decimals
     require(
-        treasury_available(c, body.asset) >= output,
-        "The treasury needs more of this asset before conversion is available.",
+        available >= output,
+        f"The Devnet treasury needs {Decimal(output) / scale:f} {body.asset} for this conversion, "
+        f"but only {Decimal(available) / scale:f} {body.asset} is available. "
+        f"Fund the treasury with Devnet {body.asset}, then try again.",
         409,
     )
     row = dict(
@@ -216,6 +238,10 @@ def quote(c, user, body):
     c.execute(
         "INSERT INTO conversion_quotes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         tuple(row.values()),
+    )
+    c.execute(
+        "INSERT INTO conversion_quote_mints VALUES (?,?)",
+        (row["id"], get_settings().solana_usdc_mint),
     )
     return row
 
@@ -239,6 +265,15 @@ def convert(c, user, body):
     used = c.one("SELECT * FROM conversions WHERE quote_id=?", (q["id"],))
     if used:
         return used
+    if get_settings().app_mode == "devnet":
+        scope = c.one(
+            "SELECT mint FROM conversion_quote_mints WHERE quote_id=?", (q["id"],)
+        )
+        require(
+            scope and scope["mint"] == get_settings().solana_usdc_mint,
+            "Funding token changed. Request a new quote.",
+            409,
+        )
     require(q["expires_at"] > now(), "Quote expired. Request a new quote.", 409)
     snapshot = fund_snapshot(c)
     require(

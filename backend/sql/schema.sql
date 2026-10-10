@@ -128,3 +128,23 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 );
 CREATE INDEX IF NOT EXISTS conversions_owner ON conversions(user_id,created_at);
 CREATE INDEX IF NOT EXISTS withdrawals_owner ON withdrawals(user_id,created_at);
+
+CREATE TABLE IF NOT EXISTS reward_funding_status (
+ reward_id TEXT PRIMARY KEY REFERENCES rewards(id),
+ code TEXT NOT NULL, message TEXT NOT NULL, checked_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS funding_deposits (
+ signature TEXT PRIMARY KEY, amount_base_units BIGINT NOT NULL CHECK(amount_base_units>0),
+ treasury TEXT NOT NULL, mint TEXT NOT NULL, slot BIGINT NOT NULL,
+ actor_id TEXT REFERENCES users(id), created_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS conversion_quote_mints (
+ quote_id TEXT PRIMARY KEY REFERENCES conversion_quotes(id), mint TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS funding_inventory_receipts (
+ signature TEXT PRIMARY KEY REFERENCES funding_deposits(signature),
+ reason TEXT NOT NULL, created_at BIGINT NOT NULL
+);

@@ -66,3 +66,41 @@ export async function signBurn(transaction: string, expectedAddress: string) {
   });
   return getBase58Decoder().decode(result.signature);
 }
+
+// Government funding uses the selected wallet without changing the signed-in role.
+export function fundingWallets() {
+  return getWallets()
+    .get()
+    .filter(
+      (w) =>
+        w.chains.includes("solana:devnet") &&
+        "standard:connect" in w.features &&
+        "solana:signAndSendTransaction" in w.features,
+    );
+}
+export async function sendFundingDeposit(
+  wallet: Wallet,
+  amountBaseUnits: number,
+) {
+  const features = wallet.features as StandardConnectFeature &
+    SolanaSignAndSendTransactionFeature;
+  const { accounts } = await features["standard:connect"].connect();
+  const account = accounts.find((a) => a.chains.includes("solana:devnet"));
+  if (!account)
+    throw new Error("Select your government funding wallet on Solana Devnet.");
+  const prepared = await api<{ transaction_b64: string }>("/funding/prepare", {
+    source_wallet: account.address,
+    amount_base_units: amountBaseUnits,
+  });
+  const [sent] = await features[
+    "solana:signAndSendTransaction"
+  ].signAndSendTransaction({
+    account,
+    chain: "solana:devnet",
+    transaction: Uint8Array.from(atob(prepared.transaction_b64), (c) =>
+      c.charCodeAt(0),
+    ),
+    options: { commitment: "confirmed" },
+  });
+  return getBase58Decoder().decode(sent.signature);
+}

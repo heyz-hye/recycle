@@ -337,7 +337,7 @@ def test_distributed_supply_excludes_treasury_and_zero_supply_cannot_convert(
     )
     monkeypatch.setattr("app.services.solana_client.chain", chain)
     snapshot = client.get("/api/assets").json()
-    assert snapshot["supply_basis"] == "distributed"
+    assert snapshot["supply_basis"] == "earned_unredeemed"
     assert snapshot["valuation"]["supply_base_units"] == 4000
     assert snapshot["valuation"]["fund_usd_micros"] == 500000000
     chain.assert_not_called()
@@ -359,12 +359,41 @@ def test_existing_loop_inventory_limits_rewards_and_conversion_releases_stock(
     opened(client, claim)
     monkeypatch.setattr(get_settings(), "app_mode", "devnet")
     with transaction() as c:
+        c.execute(
+            "INSERT INTO funding_deposits VALUES ('verified-test',500000000,'treasury','4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',1,NULL,1)"
+        )
         staff = c.one("SELECT * FROM users WHERE id='verifier'")
         confirm(c, claim["id"], staff, Confirmation(**APPROVE))
         assert c.one("SELECT state FROM rewards")["state"] == "awaiting_funding"
+        status = c.one("SELECT * FROM reward_funding_status")
+        assert status["code"] == "insufficient_loop"
+        assert "40.00 more LOOP" in status["message"]
+        # Dollar funding alone cannot resolve a token inventory shortage.
+        c.execute("UPDATE funding_account SET available_cents=available_cents+100")
+        fund_waiting(c)
+        assert c.one("SELECT state FROM rewards")["state"] == "awaiting_funding"
+        assert c.one("SELECT COUNT(*) AS n FROM reward_jobs")["n"] == 0
+    monkeypatch.setattr(get_settings(), "app_mode", "demo")
+    login(client)
+    assert (
+        client.get("/api/wallet").json()["rewards"][0]["funding_reason"]
+        == "insufficient_loop"
+    )
+    assert (
+        client.get(f"/api/claims/{claim['id']}").json()["reward"]["funding_message"]
+        == status["message"]
+    )
+    login(client, "partner")
+    assert (
+        client.get("/api/funding").json()["blocked_rewards"][0]["funding_reason"]
+        == "insufficient_loop"
+    )
+    monkeypatch.setattr(get_settings(), "app_mode", "devnet")
+    with transaction() as c:
         adapter.asset_balance.return_value = 10000
         fund_waiting(c)
         assert c.one("SELECT state FROM rewards")["state"] == "queued"
+        assert c.one("SELECT COUNT(*) AS n FROM reward_funding_status")["n"] == 0
         assert assets.loop_inventory_available(c) == 6000
     tick()
     tick()
@@ -410,3 +439,107 @@ def test_unconfirmed_ticket_cannot_create_or_process_a_reward(client):
     with transaction() as c:
         assert c.one("SELECT state FROM rewards")["state"] == "queued"
         assert c.one("SELECT needs_review FROM reward_jobs")["needs_review"] == 1
+
+
+def test_treasury_unavailable_is_distinct_from_insufficient_funding(
+    client, monkeypatch
+):
+    from unittest.mock import Mock
+    from app.services.rewards import fund_waiting
+
+    adapter = Mock()
+    adapter.asset_balance.side_effect = RuntimeError("private RPC details")
+    monkeypatch.setattr("app.services.solana_client.chain", lambda: adapter)
+    claim = submit(client)
+    opened(client, claim)
+    monkeypatch.setattr(get_settings(), "app_mode", "devnet")
+    from app.services.verification import confirm
+    from app.repositories.claims import get_claim
+    from app.schemas import Confirmation
+    from test_flow import APPROVE
+
+    with transaction() as c:
+        c.execute(
+            "INSERT INTO funding_deposits VALUES ('verified-test',500000000,'treasury','4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',1,NULL,1)"
+        )
+        staff = c.one("SELECT * FROM users WHERE id='verifier'")
+        confirm(c, claim["id"], staff, Confirmation(**APPROVE))
+        reward = get_claim(c, claim["id"], staff)["reward"]
+    assert reward["funding_reason"] == "treasury_unavailable"
+    assert "private RPC details" not in reward["funding_message"]
+    with transaction() as c:
+        assert c.one("SELECT COUNT(*) AS n FROM reward_jobs")["n"] == 0
+        adapter.asset_balance.side_effect = None
+        adapter.asset_balance.return_value = 4000
+        fund_waiting(c)
+        fund_waiting(c)
+        assert c.one("SELECT COUNT(*) AS n FROM reward_jobs")["n"] == 1
+        assert c.one("SELECT COUNT(*) AS n FROM reward_funding_status")["n"] == 0
+
+
+def test_conversion_reports_asset_shortfall_and_recovers_after_top_up(
+    client, monkeypatch
+):
+    earned(client)
+    monkeypatch.setattr(assets, "treasury_available", lambda c, asset: 0)
+    body = {"asset": "USDC", "loop_base_units": 1000}
+    result = client.post("/api/assets/quotes", json=body)
+    assert result.status_code == 409
+    assert "needs 125 USDC" in result.json()["detail"]
+    assert "only 0 USDC is available" in result.json()["detail"]
+    with transaction(write=False) as c:
+        assert c.one("SELECT COUNT(*) AS n FROM conversion_quotes")["n"] == 0
+        assert c.one("SELECT COUNT(*) AS n FROM conversions")["n"] == 0
+    monkeypatch.setattr(assets, "treasury_available", lambda c, asset: 125000000)
+    result = client.post("/api/assets/quotes", json=body)
+    assert result.status_code == 200
+    assert result.json()["output_base_units"] == 125000000
+    assert (
+        client.get("/api/assets").json()["balances"]["LOOP"]["available_base_units"]
+        == 4000
+    )
+
+
+def test_staff_confirmation_counts_waiting_rewards_and_invalidates_quote(client):
+    from app.services.rewards import fund_waiting
+
+    earned(client)
+    old_quote = client.post(
+        "/api/assets/quotes", json={"asset": "USDC", "loop_base_units": 1000}
+    ).json()
+    assert old_quote["supply_base_units"] == 4000
+    second = submit(client)
+    assert client.get("/api/assets").json()["valuation"]["supply_base_units"] == 4000
+    opened(client, second)
+    with transaction() as c:
+        c.execute("UPDATE funding_account SET available_cents=0 WHERE id='main'")
+    response = approve(client, second)
+    assert response.json()["reward"]["state"] == "awaiting_funding"
+    login(client)
+    assert client.get("/api/assets").json()["valuation"]["supply_base_units"] == 8000
+    assert (
+        client.get("/api/assets").json()["balances"]["LOOP"]["available_base_units"]
+        == 4000
+    )
+    response = client.post(
+        "/api/assets/conversions",
+        json={"quote_id": old_quote["id"], "request_key": "before-confirmation"},
+    )
+    assert response.status_code == 409
+    assert "Fund value or LOOP supply changed" in response.json()["detail"]
+    new_quote = client.post(
+        "/api/assets/quotes", json={"asset": "USDC", "loop_base_units": 1000}
+    ).json()
+    assert new_quote["output_base_units"] == 62500000
+    with transaction() as c:
+        c.execute("UPDATE funding_account SET available_cents=100 WHERE id='main'")
+        fund_waiting(c)
+        assert assets.fund_snapshot(c)["supply_base_units"] == 8000
+    tick()
+    assert client.get("/api/assets").json()["valuation"]["supply_base_units"] == 8000
+    tick()
+    assert client.get("/api/assets").json()["valuation"]["supply_base_units"] == 8000
+    assert (
+        client.get("/api/assets").json()["balances"]["LOOP"]["available_base_units"]
+        == 8000
+    )

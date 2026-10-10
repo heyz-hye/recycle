@@ -12,25 +12,62 @@ def has_confirmed_ticket(c, claim_id, user_id):
     )
 
 
+def waiting(c, reward, code, message):
+    c.execute(
+        "INSERT INTO reward_funding_status (reward_id,code,message,checked_at) VALUES (?,?,?,?) "
+        "ON CONFLICT (reward_id) DO UPDATE SET code=excluded.code,message=excluded.message,checked_at=excluded.checked_at",
+        (reward["id"], code, message, now()),
+    )
+    return False
+
+
 def reserve(c, reward):
     from .assets import remaining_fund, loop_inventory_available
     from ..config import get_settings
 
+    budget_message = (
+        "The ticket is confirmed. Waiting for verified USDC funding to back this reward."
+        if get_settings().app_mode == "devnet"
+        else "The ticket is confirmed. Waiting for available funding to reserve this reward."
+    )
     if remaining_fund(c) < reward["cost_cents"] * 10000:
-        return False
+        return waiting(c, reward, "insufficient_budget", budget_message)
     if get_settings().app_mode != "demo":
         try:
-            if loop_inventory_available(c) < reward["amount_base_units"]:
-                return False
+            available = loop_inventory_available(c)
+            required = reward["amount_base_units"]
+            if available < required:
+                return waiting(
+                    c,
+                    reward,
+                    "insufficient_loop",
+                    f"The ticket is confirmed for {required / 100:,.2f} LOOP. "
+                    f"The treasury has {available / 100:,.2f} LOOP available and needs "
+                    f"{(required - available) / 100:,.2f} more LOOP. "
+                    "USDC deposits back conversions; ticket rewards also need treasury LOOP. Rewards retry automatically.",
+                )
         except Exception:
-            # Missing inventory/configuration keeps the reward awaiting funding.
-            return False
-    result = c.execute(
-        "UPDATE funding_account SET available_cents=available_cents-?, reserved_cents=reserved_cents+? WHERE id='main' AND available_cents>=?",
-        (reward["cost_cents"], reward["cost_cents"], reward["cost_cents"]),
-    )
-    if result.rowcount != 1:
-        return False
+            return waiting(
+                c,
+                reward,
+                "treasury_unavailable",
+                "The ticket is confirmed. Treasury LOOP availability could not be checked. Retrying automatically.",
+            )
+    if get_settings().app_mode == "demo":
+        result = c.execute(
+            "UPDATE funding_account SET available_cents=available_cents-?, reserved_cents=reserved_cents+? WHERE id='main' AND available_cents>=?",
+            (reward["cost_cents"], reward["cost_cents"], reward["cost_cents"]),
+        )
+        if result.rowcount != 1:
+            return waiting(c, reward, "insufficient_budget", budget_message)
+    else:
+        # Devnet funding is the verified USDC pool, checked above. Legacy cent
+        # allocations remain an audit trail and never set the conversion price.
+        c.execute(
+            "UPDATE funding_account SET reserved_cents=reserved_cents+? WHERE id='main'",
+            (reward["cost_cents"],),
+        )
+    c.execute("DELETE FROM reward_funding_status WHERE reward_id=?", (reward["id"],))
     c.execute("UPDATE rewards SET state='queued' WHERE id=?", (reward["id"],))
     c.execute("INSERT INTO reward_jobs (reward_id) VALUES (?)", (reward["id"],))
     c.execute(
@@ -84,6 +121,13 @@ def create_reward(c, claim, amount):
 
 
 def deposit(c, actor, body):
+    from ..config import get_settings
+
+    require(
+        get_settings().app_mode == "demo",
+        "Send USDC to the treasury and verify its transaction signature to add funding.",
+        409,
+    )
     reference = f"deposit:{actor['id']}:{body.request_key}"
     existing = c.one(
         "SELECT amount_cents FROM funding_ledger WHERE reference=?", (reference,)

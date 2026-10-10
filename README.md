@@ -85,7 +85,11 @@ Use different databases for demo and Devnet. The database records its mode and r
 
 Use your existing LOOP mint and fund a dedicated server treasury with LOOP, Devnet SOL, and test USDC. Ticket confirmation credits the recycler's platform balance; wallet withdrawals transfer existing tokens without minting new LOOP. Users link their wallet with a signed ownership challenge.
 
-LOOP conversion value is **remaining recorded fund ÷ distributed, unredeemed LOOP**, excluding unallocated treasury inventory. Users can convert their platform LOOP to USDC/SOL and withdraw either asset. See [wallet setup, pricing, migrations, and recovery](docs/WALLETS_AND_CONVERSIONS.md) for configuration and test limits.
+Optional high-volume testing can use a separate six-decimal **Mock USD** mint with `MOCK_USDC_ENABLED=true`. It is visibly labeled, Devnet-only, and kept separate from Circle receipts; see the wallet guide below.
+
+LOOP conversion value is **remaining released government funding ÷ earned, unredeemed LOOP**, excluding unallocated treasury inventory. Users can convert their platform LOOP to USDC/SOL and withdraw either asset. See [wallet setup, pricing, migrations, and recovery](docs/WALLETS_AND_CONVERSIONS.md) for configuration and test limits.
+
+Government fund managers enter a USDC amount in **Funding → Deposit USDC**, select their wallet, and approve the transfer. The app submits the receipt for verification automatically. Transfers sent outside the app can be recovered under **Already sent USDC from your wallet?**. Playground/the platform operator supplies LOOP inventory separately; the government funding page handles only the USDC pool. Finalized receipts are checked for the configured USDC mint, treasury recipient, successful execution, and positive net incoming amount. Each signature is counted once. One USDC supplies $1 of accounting backing; existing manually entered dollar entries are excluded in Devnet. No payment provider is involved. SOL conversion still needs separately stocked Devnet SOL; this flow does not swap USDC on a DEX.
 
 Use a separate PostgreSQL database/schema with `APP_MODE=devnet`, `DEMO_ACCOUNTS_ENABLED=false`, and server-only treasury keypair access. Configure centers and staff/fund-manager accounts using [the account guide](docs/ACCOUNTS_AND_TIGER_DATA.md). `./scripts/dev.sh` starts the worker automatically in Devnet mode. For separate service deployments, run the worker alongside the API:
 
