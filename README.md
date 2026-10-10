@@ -87,7 +87,7 @@ Use your existing LOOP mint and fund a dedicated server treasury with LOOP, Devn
 
 LOOP conversion value is **remaining recorded fund ÷ distributed, unredeemed LOOP**, excluding unallocated treasury inventory. Users can convert their platform LOOP to USDC/SOL and withdraw either asset. See [wallet setup, pricing, migrations, and recovery](docs/WALLETS_AND_CONVERSIONS.md) for configuration and test limits.
 
-Use a separate PostgreSQL database/schema with `APP_MODE=devnet`, `DEMO_ACCOUNTS_ENABLED=false`, and server-only treasury keypair access. Configure centers and staff/fund-manager accounts using [the account guide](docs/ACCOUNTS_AND_TIGER_DATA.md). Run the worker alongside the API:
+Use a separate PostgreSQL database/schema with `APP_MODE=devnet`, `DEMO_ACCOUNTS_ENABLED=false`, and server-only treasury keypair access. Configure centers and staff/fund-manager accounts using [the account guide](docs/ACCOUNTS_AND_TIGER_DATA.md). `./scripts/dev.sh` starts the worker automatically in Devnet mode. For separate service deployments, run the worker alongside the API:
 
 ```bash
 PYTHONPATH=backend .venv/bin/python -m app.worker

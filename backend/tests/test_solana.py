@@ -20,8 +20,9 @@ def adapter():
     return a
 
 
-def test_mint_transaction_signed_and_distinct_per_reward():
+def test_reward_transaction_transfers_treasury_stock_and_is_distinct():
     a = adapter()
+    a.check_payout = Mock()
     wallet = str(Keypair().pubkey())
     first = a.prepare({"id": "claim-one", "amount_base_units": 4000}, wallet)
     second = a.prepare({"id": "claim-two", "amount_base_units": 4000}, wallet)
@@ -29,10 +30,12 @@ def test_mint_transaction_signed_and_distinct_per_reward():
     tx = Transaction.from_bytes(base64.b64decode(first["transaction_b64"]))
     tx.verify()
     assert len(tx.message.instructions) == 3
-    assert tx.message.instructions[1].data[0] == 14  # SPL MintToChecked
+    assert (
+        tx.message.instructions[1].data[0] == 12
+    )  # SPL TransferChecked; rewards never mint
     assert int.from_bytes(tx.message.instructions[1].data[1:9], "little") == 4000
     assert tx.message.instructions[1].data[9] == 2
-    assert tx.message.instructions[2].data == b"LoopMint reward:claim-one"
+    assert tx.message.instructions[2].data == b"LoopMint withdrawal:reward:claim-one"
 
 
 def signed_burn(a, owner, redemption="redemption-one"):

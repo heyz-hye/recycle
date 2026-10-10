@@ -36,7 +36,7 @@ Also set `DATABASE_URL`, `PUBLIC_ORIGIN`, and cookie settings for your deploymen
 
 Fund the server treasury with existing LOOP, Devnet SOL for fees/account rent, and Circle test USDC. Send the tokens using the configured mint. The adapter supports classic SPL LOOP mints with 2–9 decimals and converts the platform's 0.01 LOOP units into the correct chain units; the existing mint above has nine decimals. It never needs mint authority for withdrawals and preserves the mint/metadata.
 
-Start the API and a separate worker:
+`./scripts/dev.sh` starts the API, frontend, and a Devnet worker automatically when `APP_MODE=devnet`. For separate service deployments, start the worker explicitly:
 
 ```bash
 PYTHONPATH=backend .venv/bin/python -m app.worker
@@ -55,3 +55,9 @@ Treasury inventory and all user liabilities are checked before new rewards/conve
 The government funding amount is still an operator-entered test ledger, not a verified bank deposit or reserve attestation. The existing reward-budget reservation accounting is separate from the conversion exchange rate; its historical one-cent-per-LOOP allocation does not set the conversion price. Devnet tokens and test USDC have no real monetary value. A production launch needs verified reserve funding, audited custody/reconciliation, and external token deposit/redemption support.
 
 Primary references: [Solana token transfers](https://solana.com/docs/tokens/basics/transfer-tokens), [Circle USDC on Solana](https://www.circle.com/multi-chain-usdc/solana), and [Coinbase price API](https://docs.cdp.coinbase.com/coinbase-app/track-apis/prices).
+
+## Moving a local demo to Devnet
+
+Keep the demo database intact. Move only account credentials, role/workplace profiles, and registered center configuration into the Devnet database; do not copy simulated rewards, funding, conversions, or withdrawals into token entitlements. Users sign in again after switching. Use a single Devnet liability ledger per treasury wallet so two databases cannot independently reserve the same tokens. Existing simulated withdrawal records are not blockchain receipts.
+
+The API only creates rewards after an approved center verification, and the worker checks the stored confirmation again before processing. Approval credits the platform balance. The user's withdrawal request is the step that transfers treasury tokens to the linked wallet. Both the current withdrawal path and legacy reward preparation use SPL transfers, never minting. Demo withdrawal controls explicitly say “Simulate” and report that no tokens were sent.

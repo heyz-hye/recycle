@@ -3,7 +3,7 @@ import time
 from .db import transaction, initialize
 from .services.solana_client import chain, DemoChain
 from .services.common import now, uid, event
-from .services.rewards import fund_waiting
+from .services.rewards import fund_waiting, has_confirmed_ticket
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +27,15 @@ def tick(adapter=None):
                     (reward_id,),
                 )
                 if reward["state"] == "confirmed" or job["needs_review"]:
+                    continue
+                if not has_confirmed_ticket(c, reward["claim_id"], reward["user_id"]):
+                    c.execute(
+                        "UPDATE reward_jobs SET needs_review=1,last_error=? WHERE reward_id=?",
+                        (
+                            "Reward blocked: the ticket has no valid center confirmation.",
+                            reward_id,
+                        ),
+                    )
                     continue
                 custody = c.one(
                     "SELECT delivery FROM reward_custody WHERE reward_id=?",

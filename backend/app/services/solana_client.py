@@ -17,8 +17,6 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import (
     create_idempotent_associated_token_account,
     get_associated_token_address,
-    mint_to_checked,
-    MintToCheckedParams,
     burn_checked,
     BurnCheckedParams,
     transfer_checked,
@@ -82,37 +80,16 @@ class SolanaChain:
         return info.supply // 10 ** (info.decimals - 2)
 
     def prepare(self, reward, wallet):
-        owner = Pubkey.from_string(wallet)
-        ata = get_associated_token_address(owner, self.mint)
-        instructions = [
-            create_idempotent_associated_token_account(
-                self.issuer.pubkey(), owner, self.mint
-            ),
-            mint_to_checked(
-                MintToCheckedParams(
-                    program_id=TOKEN_PROGRAM_ID,
-                    mint=self.mint,
-                    dest=ata,
-                    mint_authority=self.issuer.pubkey(),
-                    amount=self.loop_chain_units(reward["amount_base_units"]),
-                    decimals=getattr(self, "loop_decimals", 2),
-                )
-            ),
-            Instruction(
-                Pubkey.from_string("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
-                f"LoopMint reward:{reward['id']}".encode(),
-                [],
-            ),
-        ]
-        block = self.rpc.get_latest_blockhash().value
-        tx = Transaction.new_signed_with_payer(
-            instructions, self.issuer.pubkey(), [self.issuer], block.blockhash
+        # Legacy external reward jobs also transfer existing treasury stock.
+        # New rewards credit the platform first and use manual withdrawals.
+        return self.prepare_withdrawal(
+            {
+                "id": f"reward:{reward['id']}",
+                "asset": "LOOP",
+                "amount_base_units": reward["amount_base_units"],
+                "destination": wallet,
+            }
         )
-        return {
-            "transaction_b64": base64.b64encode(bytes(tx)).decode(),
-            "signature": str(tx.signatures[0]),
-            "last_valid_block_height": block.last_valid_block_height,
-        }
 
     def usdc_mint(self):
         if (

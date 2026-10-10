@@ -164,7 +164,10 @@ export default function AssetWallet({
                 }
                 onClick={() => setModal(asset)}
               >
-                Withdraw {asset} <ArrowUpRight size={16} />
+                {simulated
+                  ? `Simulate ${asset} withdrawal`
+                  : `Withdraw ${asset}`}{" "}
+                <ArrowUpRight size={16} />
               </button>
             </div>
           ))}
@@ -350,7 +353,9 @@ function AssetAction({
         });
         sessionStorage.removeItem(storageKey);
         await onComplete(
-          `Withdrawal ${result.state === "confirmed" ? "completed" : "queued"}. ${amountText(units, asset)} ${asset} is reserved while we confirm the transfer.`,
+          data.network === "simulated"
+            ? "Withdrawal simulation saved. No tokens were sent to your wallet."
+            : `Withdrawal ${result.state === "confirmed" ? "completed" : "queued"}. ${amountText(units, asset)} ${asset} is reserved while we confirm the transfer.`,
         );
       }
     } catch (e) {
@@ -361,7 +366,13 @@ function AssetAction({
   }
   return (
     <Modal
-      title={convert ? "Convert LOOP" : `Withdraw ${asset}`}
+      title={
+        convert
+          ? "Convert LOOP"
+          : data.network === "simulated"
+            ? `Simulate ${asset} withdrawal`
+            : `Withdraw ${asset}`
+      }
       onClose={onClose}
     >
       <form onSubmit={submit}>
@@ -468,7 +479,9 @@ function AssetAction({
                   ? "Confirm conversion"
                   : "Preview conversion"
                 : review
-                  ? "Confirm withdrawal"
+                  ? data.network === "simulated"
+                    ? "Confirm simulation"
+                    : "Confirm withdrawal"
                   : "Review withdrawal"}
           </button>
         </div>

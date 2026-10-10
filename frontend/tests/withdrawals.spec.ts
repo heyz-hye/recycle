@@ -84,7 +84,10 @@ test("recycler links a wallet, converts LOOP, and withdraws LOOP, USDC and SOL",
     await dialog.getByRole("button", { name: "Confirm conversion" }).click();
     await expect(dialog).not.toBeVisible();
     await page
-      .getByRole("button", { name: `Withdraw ${asset}`, exact: true })
+      .getByRole("button", {
+        name: `Simulate ${asset} withdrawal`,
+        exact: true,
+      })
       .click();
     const digits = asset === "USDC" ? 6 : 9;
     const units = BigInt(quote.output_base_units);
@@ -93,11 +96,11 @@ test("recycler links a wallet, converts LOOP, and withdraws LOOP, USDC and SOL",
     await dialog.getByLabel(`${asset} amount`).fill(amount);
     await dialog.getByRole("button", { name: "Review withdrawal" }).click();
     await expect(dialog).toContainText(wallet);
-    await dialog.getByRole("button", { name: "Confirm withdrawal" }).click();
+    await dialog.getByRole("button", { name: "Confirm simulation" }).click();
     await expect(dialog).not.toBeVisible();
   }
   await page
-    .getByRole("button", { name: "Withdraw LOOP", exact: true })
+    .getByRole("button", { name: "Simulate LOOP withdrawal", exact: true })
     .click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("LOOP amount").fill("1.001");
@@ -105,7 +108,7 @@ test("recycler links a wallet, converts LOOP, and withdraws LOOP, USDC and SOL",
   await expect(dialog.getByRole("alert")).toContainText("2 decimal places");
   await dialog.getByLabel("LOOP amount").fill("1");
   await dialog.getByRole("button", { name: "Review withdrawal" }).click();
-  await dialog.getByRole("button", { name: "Confirm withdrawal" }).click();
+  await dialog.getByRole("button", { name: "Confirm simulation" }).click();
   await expect(dialog).not.toBeVisible();
   await expect
     .poll(
@@ -152,6 +155,9 @@ test("unlinked wallet cannot withdraw", async ({ page }) => {
   ).toBeVisible();
   for (const asset of ["LOOP", "USDC", "SOL"])
     await expect(
-      page.getByRole("button", { name: `Withdraw ${asset}`, exact: true }),
+      page.getByRole("button", {
+        name: `Simulate ${asset} withdrawal`,
+        exact: true,
+      }),
     ).toBeDisabled();
 });

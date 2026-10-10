@@ -1,6 +1,17 @@
 from .common import uid, now, require
 
 
+def has_confirmed_ticket(c, claim_id, user_id):
+    return bool(
+        c.one(
+            "SELECT c.id FROM claims c JOIN verifications v ON v.claim_id=c.id "
+            "WHERE c.id=? AND c.user_id=? AND c.status='verified' "
+            "AND v.decision='approved' AND v.center_id=c.center_id AND v.verifier_id!=c.user_id",
+            (claim_id, user_id),
+        )
+    )
+
+
 def reserve(c, reward):
     from .assets import remaining_fund, loop_inventory_available
     from ..config import get_settings
@@ -44,6 +55,11 @@ def fund_waiting(c):
 
 
 def create_reward(c, claim, amount):
+    require(
+        has_confirmed_ticket(c, claim["id"], claim["user_id"]),
+        "A center-confirmed ticket is required before crediting LOOP.",
+        409,
+    )
     # Base unit = 0.01 LOOP. 1 LOOP = 1 demo cent. Reserve rounded UP.
     reward = dict(
         id=uid(),

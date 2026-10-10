@@ -386,3 +386,27 @@ def test_existing_loop_inventory_limits_rewards_and_conversion_releases_stock(
             "fund_usd_micros": 375000000,
             "supply_base_units": 3000,
         }
+
+
+def test_unconfirmed_ticket_cannot_create_or_process_a_reward(client):
+    import pytest
+    from fastapi import HTTPException
+    from unittest.mock import Mock
+    from app.services.rewards import create_reward
+
+    claim = submit(client)
+    with transaction() as c:
+        with pytest.raises(HTTPException) as failure:
+            create_reward(c, claim, 4000)
+        assert failure.value.status_code == 409
+        assert c.one("SELECT COUNT(*) AS n FROM rewards")["n"] == 0
+    opened(client, claim)
+    assert approve(client, claim).status_code == 200
+    with transaction() as c:
+        c.execute("DELETE FROM verifications WHERE claim_id=?", (claim["id"],))
+    adapter = Mock()
+    tick(adapter)
+    adapter.prepare.assert_not_called()
+    with transaction() as c:
+        assert c.one("SELECT state FROM rewards")["state"] == "queued"
+        assert c.one("SELECT needs_review FROM reward_jobs")["needs_review"] == 1
