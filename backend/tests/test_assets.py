@@ -303,7 +303,7 @@ def test_devnet_legacy_rewards_are_not_credited_twice(client, monkeypatch):
     with transaction() as c:
         seed(c)
         assert assets.balances(c, "recycler")["LOOP"]["available_base_units"] == 0
-        assert assets.fund_snapshot(c)["supply_base_units"] == 4000
+        assert assets.outstanding_loop(c) == 4000
 
 
 def test_new_devnet_reward_is_platform_credit_without_automatic_mint(
@@ -534,7 +534,7 @@ def test_staff_confirmation_counts_waiting_rewards_and_invalidates_quote(client)
     with transaction() as c:
         c.execute("UPDATE funding_account SET available_cents=100 WHERE id='main'")
         fund_waiting(c)
-        assert assets.fund_snapshot(c)["supply_base_units"] == 8000
+        assert assets.outstanding_loop(c) == 8000
     tick()
     assert client.get("/api/assets").json()["valuation"]["supply_base_units"] == 8000
     tick()

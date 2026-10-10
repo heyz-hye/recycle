@@ -65,7 +65,7 @@ def record_deposit(c, actor_id, signature):
 
 
 def summary(c):
-    from .assets import total, remaining_fund, fund_snapshot
+    from .assets import total, remaining_fund, outstanding_loop
     from .solana_client import chain
 
     result = {
@@ -85,7 +85,7 @@ def summary(c):
             "SELECT SUM(v.usd_micros) AS n FROM conversions v JOIN conversion_quote_mints m ON m.quote_id=v.quote_id WHERE m.mint=?",
             (get_settings().solana_usdc_mint,),
         ),
-        "distributed_loop_base_units": fund_snapshot(c)["supply_base_units"],
+        "distributed_loop_base_units": outstanding_loop(c),
         "deposits": c.all(
             "SELECT d.*, CASE WHEN i.signature IS NULL THEN 0 ELSE 1 END AS is_inventory FROM funding_deposits d LEFT JOIN funding_inventory_receipts i ON i.signature=d.signature WHERE d.mint=? ORDER BY d.created_at DESC,d.signature LIMIT 100",
             (get_settings().solana_usdc_mint,),

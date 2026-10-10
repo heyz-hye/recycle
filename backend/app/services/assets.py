@@ -44,7 +44,7 @@ def remaining_fund(c):
     return max(0, (budget["received_cents"] - budget["redeemed_cents"]) * 10000 - paid)
 
 
-def fund_snapshot(c):
+def outstanding_loop(c):
     # Staff confirmation earns the reward, including amounts awaiting inventory
     # or settlement. Those obligations must affect price before they are spendable.
     # Wallet withdrawals remain outstanding; unallocated treasury stock is excluded.
@@ -56,9 +56,15 @@ def fund_snapshot(c):
     burned = total(
         c, "SELECT SUM(amount_base_units) AS n FROM redemptions WHERE state='completed'"
     )
+    return max(0, earned - converted - burned)
+
+
+def fund_snapshot(c):
+    # Released government funding (minus converted value) divided by LOOP from
+    # confirmed tickets that has not been converted or redeemed.
     return {
         "fund_usd_micros": remaining_fund(c),
-        "supply_base_units": max(0, earned - converted - burned),
+        "supply_base_units": outstanding_loop(c),
     }
 
 
