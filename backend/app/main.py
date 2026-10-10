@@ -4,9 +4,11 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from .config import get_settings
 from .db import initialize
-from .routes import auth, claims, dashboard, chatbot
+from .routes import auth, claims, dashboard, assets
+from .routes.chatbot import router as chatbot_router
 
 
 async def demo_worker():
@@ -40,6 +42,20 @@ async def lifespan(app):
 app = FastAPI(title="LoopMint", version="0.1.0", lifespan=lifespan)
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_error(request, exc):
+    # Pydantic's default errors include rejected inputs, which may contain passwords.
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {"loc": error["loc"], "msg": error["msg"], "type": error["type"]}
+                for error in exc.errors()
+            ]
+        },
+    )
+
+
 @app.middleware("http")
 async def secure_requests(request: Request, call_next):
     if request.method not in ("GET", "HEAD", "OPTIONS"):
@@ -62,11 +78,19 @@ def health():
     return {
         "ok": True,
         "mode": get_settings().app_mode,
+        "demo_accounts_enabled": get_settings().app_mode == "demo"
+        and get_settings().demo_accounts_enabled,
         "network": "simulated"
         if get_settings().app_mode == "demo"
         else "solana:devnet",
     }
 
 
-for router in (auth.router, claims.router, dashboard.router, chatbot.router):
+for router in (
+    auth.router,
+    claims.router,
+    dashboard.router,
+    assets.router,
+    chatbot_router,
+):
     app.include_router(router, prefix="/api")

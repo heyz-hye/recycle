@@ -5,6 +5,13 @@ export type User = {
   wallet: string;
   role: Role;
   center_id: string | null;
+  email: string | null;
+  job_location: string | null;
+  job_address: string | null;
+  job_title: string | null;
+  organization: string | null;
+  government_agency?: string | null;
+  government_department?: string | null;
 };
 export type Item = {
   material: "bottles" | "cardboard";
@@ -43,7 +50,13 @@ export type Redemption = {
   transaction_b64: string | null;
   created_at: number;
 };
+export type RecyclingTotals = {
+  bottles: number;
+  cardboard_grams: number;
+  reward_base_units: number;
+};
 export type WalletData = {
+  totals: RecyclingTotals;
   balance_base_units: number;
   pending_base_units: number;
   rewards: Reward[];
@@ -80,6 +93,7 @@ export type Center = {
   latitude: number | null;
   longitude: number | null;
   is_demo: number;
+  google_place_id?: string | null;
 };
 export class ApiError extends Error {
   constructor(
