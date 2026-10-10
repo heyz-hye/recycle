@@ -142,4 +142,13 @@ Suggested ownership: backend handles permissions, confirmation, SQL, rewards, an
 
 Retained demo tracks: sustainability through verified intake and participation; Solana through confirmed Devnet rewards; Tiger Data through event analytics; GoDaddy Registry through an eligible connected domain. Domain candidate: loopmint.club, with availability and event eligibility still unchecked. Remove Google Gemini from the sponsor track plan.
 
-Keep native mobile apps, real government integrations, bank payouts, token trading, IoT bins, custom smart contracts, direct messaging, a general chatbot, hosted posts/feeds, and automatic social publishing outside the initial build. GPS discovery and destination directions are included; embedded maps, challenges, and leaderboards remain later work. If time is tight, preserve submission, center confirmation, one funded and confirmed reward, a copyable post template with a downloadable card, and a small impact dashboard.
+Keep native mobile apps, real government integrations, bank payouts, token trading, IoT bins, custom smart contracts, direct messaging, a general-purpose chatbot, hosted posts/feeds, and automatic social publishing outside the initial build. GPS discovery and destination directions are included; embedded maps, challenges, and leaderboards remain later work. If time is tight, preserve submission, center confirmation, one funded and confirmed reward, a copyable post template with a downloadable card, and a small impact dashboard.
+
+## LoopMint Assistant (added after the initial MVP)
+
+A narrow, recycling-only chat helper, not the general chatbot excluded above and not part of the verification path above. It cannot approve claims, change reward amounts, or move funds — that remains exclusively center confirmation plus the Python worker, per "Center confirmation and token distribution."
+
+- `POST /api/chat`, session-authenticated; the user always comes from the session, never from chat text.
+- Backed by Gemini (`google-genai`) with Pydantic-validated structured output, gated behind `GEMINI_API_KEY`. Empty key disables the feature cleanly: the endpoint reports "not configured" and the frontend hides the chat button.
+- Five read-only tools, each scoped to the signed-in user and capped at 4 tool-calls per message: preparation guidance, a Python-computed reward estimate (explicitly labeled an estimate — staff decide the real reward), the user's own reward/wallet state, community impact from `recycling_events` (verified intake only, bottles and cardboard reported separately, no CO2), and the center list.
+- Refuses questions unrelated to LoopMint recycling. Rate-limited to 20 messages per user per hour. A Gemini or network failure returns a friendly error, never a 500.

@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     solana_mint: str = ""
     solana_issuer_keypair: str = ""
     token_decimals: int = 2
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
 
     def validate_runtime(self):
         parsed = urlsplit(self.database_url)

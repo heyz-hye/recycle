@@ -86,6 +86,10 @@ export type Center = {
   longitude: number | null;
   is_demo: number;
 };
+export type ChatReply = {
+  reply: string;
+  configured: boolean;
+};
 export class ApiError extends Error {
   constructor(
     message: string,

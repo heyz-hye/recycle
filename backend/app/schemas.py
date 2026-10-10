@@ -128,3 +128,24 @@ class CenterConfiguration(StrictModel):
 
 class RedemptionConfirm(StrictModel):
     signature: str = Field(min_length=64, max_length=100)
+
+
+class ChatInput(StrictModel):
+    message: str = Field(min_length=1, max_length=1000)
+
+
+class NoArgs(StrictModel):
+    pass
+
+
+class PrepGuideArgs(StrictModel):
+    material: Literal["bottles", "cardboard"]
+
+
+class EstimateRewardArgs(StrictModel):
+    material: Literal["bottles", "cardboard"]
+    quantity: float = Field(gt=0, le=1000000)
+
+
+class ImpactPeriodArgs(StrictModel):
+    period: Literal["today", "week", "all"] = "week"
