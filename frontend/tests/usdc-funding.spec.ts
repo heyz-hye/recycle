@@ -1,11 +1,19 @@
 import { test, expect } from "@playwright/test";
 import { getBase58Encoder } from "@solana/kit";
 
-for (const mode of ["wallet", "manual", "rejected", "recovery"] as const) {
+for (const mode of [
+  "wallet",
+  "manual",
+  "rejected",
+  "recovery",
+  "large",
+] as const) {
   test(`government USDC amount deposit: ${mode}`, async ({ page }) => {
     const signature =
       "4D5R9nLFZ5KsGqUhxmAD6YL4DK5scX8RrAvQ9PwftLe5pyygfAK5nv8GXHBrRtCwjbusXKkH5MAQmLEfwbyEyA47";
     const treasury = "BtMXHkkGMipRN3KujxTcDiT9X44U4184dYWsQmJbKfjZ";
+    const depositAmount = mode === "large" ? 10000 : 20;
+    const depositUnits = depositAmount * 1000000;
     let verified = false;
     let posts = 0;
     let preparations = 0;
@@ -66,14 +74,20 @@ for (const mode of ["wallet", "manual", "rejected", "recovery"] as const) {
       ledger: [],
       blocked_rewards: [],
       usdc: {
-        received_usdc_base_units: verified ? 20000000 : 0,
-        remaining_usdc_base_units: verified ? 20000000 : 0,
+        received_usdc_base_units: verified ? depositUnits : 0,
+        remaining_usdc_base_units: verified ? depositUnits : 0,
         converted_usd_micros: 0,
         distributed_loop_base_units: 40000,
         treasury_address: treasury,
         usdc_mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
         deposits: verified
-          ? [{ signature, amount_base_units: 20000000, created_at: 1791650000 }]
+          ? [
+              {
+                signature,
+                amount_base_units: depositUnits,
+                created_at: 1791650000,
+              },
+            ]
           : [],
       },
     });
@@ -112,7 +126,7 @@ for (const mode of ["wallet", "manual", "rejected", "recovery"] as const) {
       else if (path === "/api/funding/prepare") {
         expect(route.request().postDataJSON()).toEqual({
           source_wallet: "3SyqUm7yxkmhMR63jZ7LyyEQXzDbVfGifk3jYbGHaL5d",
-          amount_base_units: 20000000,
+          amount_base_units: depositUnits,
         });
         preparations++;
         body = { transaction_b64: "AA==" };
@@ -167,20 +181,27 @@ for (const mode of ["wallet", "manual", "rejected", "recovery"] as const) {
         .getByRole("button", { name: "Verify existing deposit" })
         .click();
     } else {
-      await page.getByLabel("USDC amount").fill("20");
+      await page.getByLabel("USDC amount").fill(String(depositAmount));
       await page
         .getByRole("button", { name: "Deposit USDC", exact: true })
         .click();
       if (mode === "rejected") {
-        await expect(page.locator(".form-panel [role=alert]")).toContainText("User rejected");
+        await expect(page.locator(".form-panel [role=alert]")).toContainText(
+          "User rejected",
+        );
         expect(posts).toBe(0);
         await expect(
-          page.getByText("20 USDC received", { exact: true }),
+          page.getByText(
+            `${depositAmount.toLocaleString("en-US")} USDC received`,
+            { exact: true },
+          ),
         ).toHaveCount(0);
         return;
       }
       if (mode === "recovery") {
-        await expect(page.locator(".form-panel [role=alert]")).toContainText("Unable to verify");
+        await expect(page.locator(".form-panel [role=alert]")).toContainText(
+          "Unable to verify",
+        );
         await page.reload();
         await expect(page.locator(".topbar")).toBeVisible();
         if (await menu.isVisible()) await menu.click();
@@ -194,7 +215,9 @@ for (const mode of ["wallet", "manual", "rejected", "recovery"] as const) {
       }
     }
     await expect(
-      page.getByText("20 USDC received", { exact: true }),
+      page.getByText(`${depositAmount.toLocaleString("en-US")} USDC received`, {
+        exact: true,
+      }),
     ).toBeVisible();
     expect(preparations).toBe(mode === "manual" ? 0 : 1);
     if (mode !== "manual")
