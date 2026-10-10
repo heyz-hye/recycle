@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     solana_issuer_keypair: str = ""
     token_decimals: int = 2
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-3.8-flash"
     # Devnet-only payout assets. Set the official Circle Devnet USDC mint.
     solana_usdc_mint: str = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
     treasury_fee_reserve_lamports: int = 10000000
