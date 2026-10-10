@@ -15,7 +15,9 @@ from test_flow import login
 def receipt_adapter():
     a = object.__new__(SolanaChain)
     a.issuer = Keypair()
-    mint = Keypair().pubkey()
+    from solders.pubkey import Pubkey
+
+    mint = Pubkey.from_string(get_settings().solana_usdc_mint)
     a.usdc_mint = lambda: mint
     a.rpc = Mock()
     sig = str(Keypair().sign_message(b"deposit"))
@@ -207,7 +209,7 @@ def test_verified_pool_deducts_conversion_once_and_invalidates_old_quotes(
     monkeypatch.setattr(assets, "treasury_available", lambda c, asset: 500000000)
     with transaction() as c:
         c.execute(
-            "INSERT INTO funding_deposits VALUES ('first',20000000,'treasury','usdc',1,NULL,1)"
+            "INSERT INTO funding_deposits VALUES ('first',20000000,'treasury','4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',1,NULL,1)"
         )
         user = c.one("SELECT * FROM users WHERE id='recycler'")
         q = assets.quote(
@@ -215,7 +217,7 @@ def test_verified_pool_deducts_conversion_once_and_invalidates_old_quotes(
         )
         assert q["output_base_units"] == 5000000  # 20 USDC / 40 LOOP * 10 LOOP
         c.execute(
-            "INSERT INTO funding_deposits VALUES ('second',20000000,'treasury','usdc',2,NULL,2)"
+            "INSERT INTO funding_deposits VALUES ('second',20000000,'treasury','4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',2,NULL,2)"
         )
         with pytest.raises(HTTPException, match="Fund value or LOOP supply changed"):
             assets.convert(
@@ -270,3 +272,95 @@ def test_prepare_deposit_requires_government_role_and_does_not_credit(
             assert c.one("SELECT COUNT(*) AS n FROM funding_deposits")["n"] == 0
     finally:
         app.dependency_overrides.pop(current_user, None)
+
+
+def test_mock_funding_excludes_circle_receipts_and_old_quotes(client, monkeypatch):
+    from test_assets import earned
+    from app.schemas import ConversionQuoteInput, ConversionInput
+    from fastapi import HTTPException
+
+    earned(client)
+    monkeypatch.setattr(get_settings(), "app_mode", "devnet")
+    monkeypatch.setattr(assets, "treasury_available", lambda c, asset: 999999999999)
+    circle = get_settings().solana_usdc_mint
+    mock_mint = str(Keypair().pubkey())
+    with transaction() as c:
+        c.execute(
+            "INSERT INTO funding_deposits VALUES ('circle-fund',20000000,'treasury',?,1,NULL,1)",
+            (circle,),
+        )
+        user = c.one("SELECT * FROM users WHERE id='recycler'")
+        q = assets.quote(
+            c, user, ConversionQuoteInput(asset="USDC", loop_base_units=100)
+        )
+        monkeypatch.setattr(get_settings(), "solana_usdc_mint", mock_mint)
+        monkeypatch.setattr(get_settings(), "mock_usdc_enabled", True)
+        assert assets.remaining_fund(c) == 0
+        c.execute(
+            "INSERT INTO funding_deposits VALUES ('mock-fund',10000000000,'treasury',?,2,NULL,2)",
+            (mock_mint,),
+        )
+        assert assets.remaining_fund(c) == 10000000000
+        with pytest.raises(HTTPException, match="different funding token"):
+            funding.record_deposit(c, "partner", "circle-fund")
+        with pytest.raises(HTTPException, match="Funding token changed"):
+            assets.convert(
+                c,
+                user,
+                ConversionInput(quote_id=q["id"], request_key="old-circle-quote"),
+            )
+        assert funding.summary(c)["received_usdc_base_units"] == 10000000000
+
+
+def test_cannot_relabel_existing_usdc_balances_as_mock(client, monkeypatch):
+    from test_assets import earned
+    from app.schemas import ConversionQuoteInput, ConversionInput
+    from app.seed import seed
+
+    earned(client)
+    with transaction() as c:
+        user = c.one("SELECT * FROM users WHERE id='recycler'")
+        q = assets.quote(
+            c, user, ConversionQuoteInput(asset="USDC", loop_base_units=100)
+        )
+        assets.convert(
+            c,
+            user,
+            ConversionInput(quote_id=q["id"], request_key="prior-circle-credit"),
+        )
+        c.execute("UPDATE app_metadata SET value='devnet' WHERE key='mode'")
+        monkeypatch.setattr(get_settings(), "app_mode", "devnet")
+        monkeypatch.setattr(get_settings(), "solana_usdc_mint", str(Keypair().pubkey()))
+        monkeypatch.setattr(get_settings(), "mock_usdc_enabled", True)
+        with pytest.raises(ValueError, match="Cannot change the USDC mint"):
+            seed(c)
+
+
+def test_operator_inventory_does_not_inflate_released_government_funding(
+    client, monkeypatch
+):
+    from fastapi import HTTPException
+
+    a, sig, result = receipt_adapter()
+    result["meta"]["postTokenBalances"][0]["uiTokenAmount"]["amount"] = "10000000000"
+    set_result(a, result)
+    monkeypatch.setattr("app.services.solana_client.chain", lambda: a)
+    monkeypatch.setattr(get_settings(), "app_mode", "devnet")
+    with transaction() as c:
+        funding.record_deposit(c, None, sig)
+        funding.record_deposit(c, None, sig)
+        assert assets.remaining_fund(c) == 0
+        snapshot = funding.summary(c)
+        assert snapshot["received_usdc_base_units"] == 0
+        assert snapshot["inventory_usdc_base_units"] == 10000000000
+        assert snapshot["deposits"][0]["is_inventory"] == 1
+        with pytest.raises(HTTPException, match="test inventory"):
+            funding.record_deposit(c, "partner", sig)
+        government_signature = str(Keypair().sign_message(b"government-release"))
+        result["transaction"]["signatures"] = [government_signature]
+        result["meta"]["postTokenBalances"][0]["uiTokenAmount"]["amount"] = "110000000"
+        funding.record_deposit(c, "partner", government_signature)
+        assert assets.remaining_fund(c) == 110000000
+        snapshot = funding.summary(c)
+        assert snapshot["received_usdc_base_units"] == 110000000
+        assert snapshot["inventory_usdc_base_units"] == 10000000000

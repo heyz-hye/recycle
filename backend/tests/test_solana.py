@@ -256,3 +256,22 @@ def test_government_funding_transaction_requires_sender_signature_and_exact_usdc
         a.prepare_funding_deposit(str(source), amount)
     with pytest.raises(ValueError, match="not the platform treasury"):
         a.prepare_funding_deposit(str(a.issuer.pubkey()), 100)
+
+
+def test_custom_usd_mint_requires_explicit_mock_opt_in(monkeypatch):
+    from app.config import get_settings
+
+    a = adapter()
+    custom = Keypair().pubkey()
+    monkeypatch.setattr(get_settings(), "solana_usdc_mint", str(custom))
+    monkeypatch.setattr(get_settings(), "mock_usdc_enabled", False)
+    with pytest.raises(ValueError, match="Only Circle"):
+        a.usdc_mint()
+    monkeypatch.setattr(get_settings(), "mock_usdc_enabled", True)
+    token = Mock()
+    token.get_mint_info.return_value = SimpleNamespace(decimals=6)
+    monkeypatch.setattr("app.services.solana_client.Token", lambda *args: token)
+    assert a.usdc_mint() == custom
+    token.get_mint_info.return_value = SimpleNamespace(decimals=9)
+    with pytest.raises(ValueError, match="6 decimals"):
+        a.usdc_mint()

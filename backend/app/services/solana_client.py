@@ -95,6 +95,7 @@ class SolanaChain:
         if (
             get_settings().solana_usdc_mint
             != "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+            and not get_settings().mock_usdc_enabled
         ):
             raise ValueError("Only Circle's Solana Devnet USDC mint is supported.")
         mint = Pubkey.from_string(get_settings().solana_usdc_mint)

@@ -173,6 +173,7 @@ export default function Home() {
   const [filter, setFilter] = useState("all");
   const generation = useRef(0);
   const demo = mode === "demo";
+  const fundingToken = funding?.usdc?.mock_usdc ? "Mock USD" : "USDC";
   useEffect(() => {
     Promise.all([
       api<{ mode: string; demo_accounts_enabled: boolean }>("/health"),
@@ -1100,14 +1101,14 @@ export default function Home() {
               {!demo ? (
                 <div className="stats-grid four">
                   <Stat
-                    label="Verified deposits"
-                    value={`${((funding?.usdc?.received_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`}
+                    label="Released government funding"
+                    value={`${((funding?.usdc?.received_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${fundingToken}`}
                     icon={<CircleDollarSign size={19} />}
-                    note="Finalized treasury deposits"
+                    note="Verified government deposits only"
                   />
                   <Stat
                     label="Available backing"
-                    value={`${((funding?.usdc?.remaining_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`}
+                    value={`${((funding?.usdc?.remaining_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${fundingToken}`}
                     icon={<Wallet size={19} />}
                     note="Deposits minus redeemed value"
                   />
@@ -1125,7 +1126,7 @@ export default function Home() {
                       funding?.usdc?.distributed_loop_base_units || 0,
                     )}
                     icon={<RefreshCw size={19} />}
-                    note="Distributed and not redeemed"
+                    note="Staff-confirmed earnings minus redemptions"
                   />
                 </div>
               ) : (
@@ -1205,14 +1206,27 @@ export default function Home() {
                   <div className="panel-heading">
                     <h2>Funding activity</h2>
                     <span className="pill">
-                      {demo ? "Simulated funds" : "Devnet USDC"}
+                      {demo ? "Simulated funds" : `Devnet ${fundingToken}`}
                     </span>
                   </div>
                   {!demo && (
                     <>
                       <p className="muted">
-                        Only verified USDC deposits fund LOOP. Earlier manually
-                        entered dollar amounts are excluded.
+                        Only released government funding backs LOOP. Operator
+                        test inventory and manually entered dollar amounts are
+                        excluded.
+                        {!!funding?.usdc?.inventory_usdc_base_units && (
+                          <>
+                            {" "}
+                            Test inventory:{" "}
+                            {(
+                              funding.usdc.inventory_usdc_base_units / 1e6
+                            ).toLocaleString(undefined, {
+                              maximumFractionDigits: 6,
+                            })}{" "}
+                            {fundingToken} (excluded from pricing).
+                          </>
+                        )}
                       </p>
                       {funding?.usdc?.deposits.map((d) => (
                         <div className="transaction-row" key={d.signature}>
@@ -1222,9 +1236,14 @@ export default function Home() {
                                 undefined,
                                 { maximumFractionDigits: 6 },
                               )}{" "}
-                              USDC received
+                              {fundingToken} received
                             </strong>
-                            <p>{date(d.created_at)}</p>
+                            <p>
+                              {date(d.created_at)} ·{" "}
+                              {d.is_inventory
+                                ? "Test inventory — not released funding"
+                                : "Released government funding"}
+                            </p>
                           </div>
                           <a
                             className="text-link"

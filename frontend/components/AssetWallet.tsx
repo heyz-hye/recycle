@@ -31,6 +31,8 @@ type Assets = {
   balances: Record<Asset, Balance>;
   valuation: { fund_usd_micros: number; supply_base_units: number };
   network: string;
+  mock_usdc?: boolean;
+  usdc_mint?: string;
   withdrawals_configured: boolean;
   withdrawals: Withdrawal[];
   conversions: Conversion[];
@@ -46,6 +48,8 @@ type Quote = {
   sol_usd_micros: number;
   expires_at: number;
 };
+const assetLabel = (asset: Asset, data?: Assets | null) =>
+  asset === "USDC" && data?.mock_usdc ? "Mock USD" : asset;
 const decimals: Record<Asset, number> = { LOOP: 2, USDC: 6, SOL: 9 };
 const amountText = (value: number, asset: Asset) =>
   new Intl.NumberFormat("en-US", {
@@ -138,10 +142,17 @@ export default function AssetWallet({
             ? "Local simulation: no tokens leave the platform."
             : "Solana Devnet: test assets only, no real monetary value."}
         </p>
+        {data?.mock_usdc && (
+          <p className="info-box">
+            Mock USD is a custom Devnet token, not Circle USDC. No monetary
+            value. Mint:{" "}
+            <span style={{ overflowWrap: "anywhere" }}>{data.usdc_mint}</span>
+          </p>
+        )}
         <div className="stats-grid asset-balances">
           {(["LOOP", "USDC", "SOL"] as Asset[]).map((asset) => (
             <div className="stat-card" key={asset}>
-              <strong>{asset}</strong>
+              <strong>{assetLabel(asset, data)}</strong>
               <div className="stat-value">
                 {amountText(
                   data?.balances[asset].available_base_units || 0,
@@ -166,7 +177,7 @@ export default function AssetWallet({
               >
                 {simulated
                   ? `Simulate ${asset} withdrawal`
-                  : `Withdraw ${asset}`}{" "}
+                  : `Withdraw ${assetLabel(asset, data)}`}{" "}
                 <ArrowUpRight size={16} />
               </button>
             </div>
@@ -201,7 +212,8 @@ export default function AssetWallet({
           </p>
         )}
         <p className="small muted">
-          LOOP value = remaining fund ÷ distributed, unredeemed LOOP.{" "}
+          LOOP value = remaining fund ÷ earned, unredeemed LOOP. Staff-confirmed
+          rewards count even while awaiting credit.{" "}
           {data &&
             `Fund: $${amountText(data.valuation.fund_usd_micros, "USDC")} · Outstanding: ${tokens(data.valuation.supply_base_units)} LOOP.`}{" "}
           Unallocated treasury LOOP is excluded. Withdrawn LOOP still counts
@@ -217,7 +229,8 @@ export default function AssetWallet({
             <div className="asset-history-row" key={w.id}>
               <div>
                 <strong>
-                  {amountText(w.amount_base_units, w.asset)} {w.asset}
+                  {amountText(w.amount_base_units, w.asset)}{" "}
+                  {assetLabel(w.asset, data)}
                 </strong>
                 <p className="small account-wallet">To {w.destination}</p>
                 <p className="small muted">
@@ -261,7 +274,8 @@ export default function AssetWallet({
             <div className="asset-history-row" key={c.id}>
               <strong>
                 {tokens(c.loop_base_units)} LOOP →{" "}
-                {amountText(c.output_base_units, c.asset)} {c.asset}
+                {amountText(c.output_base_units, c.asset)}{" "}
+                {assetLabel(c.asset, data)}
               </strong>
               <span className="badge confirmed">Conversion complete</span>
               <span className="small muted">{date(c.created_at)}</span>
@@ -371,7 +385,7 @@ function AssetAction({
           ? "Convert LOOP"
           : data.network === "simulated"
             ? `Simulate ${asset} withdrawal`
-            : `Withdraw ${asset}`
+            : `Withdraw ${assetLabel(asset, data)}`
       }
       onClose={onClose}
     >
@@ -379,7 +393,9 @@ function AssetAction({
         <p className="muted">
           {data.network === "simulated"
             ? "This is a simulation. No blockchain funds are moved."
-            : "This uses Solana Devnet test assets."}
+            : data.mock_usdc
+              ? "This uses Mock USD, a custom Devnet token, not Circle USDC. No monetary value."
+              : "This uses Solana Devnet test assets."}
         </p>
         <label htmlFor="asset-amount">{asset} amount</label>
         <input
@@ -404,7 +420,7 @@ function AssetAction({
               disabled={busy || !!quote}
               onChange={(e) => setTarget(e.target.value as "USDC" | "SOL")}
             >
-              <option>USDC</option>
+              <option value="USDC">{assetLabel("USDC", data)}</option>
               <option>SOL</option>
             </select>
           </>
@@ -413,12 +429,13 @@ function AssetAction({
           <div className="info-box quote-preview">
             <strong>
               You receive {amountText(quote.output_base_units, quote.asset)}{" "}
-              {quote.asset}
+              {assetLabel(quote.asset, data)}
             </strong>
             <p>
               Fund: ${amountText(quote.fund_usd_micros, "USDC")} ÷{" "}
-              {tokens(quote.supply_base_units)} distributed, unredeemed LOOP.
-              Treasury inventory is excluded.
+              {tokens(quote.supply_base_units)} earned, unredeemed LOOP.
+              Staff-confirmed rewards count immediately, including rewards
+              awaiting credit. Treasury inventory is excluded.
             </p>
             <p>
               {tokens(quote.loop_base_units)} LOOP will be deducted. The

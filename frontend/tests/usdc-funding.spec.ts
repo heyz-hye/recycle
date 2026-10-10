@@ -7,11 +7,13 @@ for (const mode of [
   "rejected",
   "recovery",
   "large",
+  "mock",
 ] as const) {
   test(`government USDC amount deposit: ${mode}`, async ({ page }) => {
     const signature =
       "4D5R9nLFZ5KsGqUhxmAD6YL4DK5scX8RrAvQ9PwftLe5pyygfAK5nv8GXHBrRtCwjbusXKkH5MAQmLEfwbyEyA47";
     const treasury = "BtMXHkkGMipRN3KujxTcDiT9X44U4184dYWsQmJbKfjZ";
+    const tokenLabel = mode === "mock" ? "Mock USD" : "USDC";
     const depositAmount = mode === "large" ? 10000 : 20;
     const depositUnits = depositAmount * 1000000;
     let verified = false;
@@ -74,6 +76,8 @@ for (const mode of [
       ledger: [],
       blocked_rewards: [],
       usdc: {
+        mock_usdc: mode === "mock",
+        inventory_usdc_base_units: mode === "mock" ? 10000000000 : 0,
         received_usdc_base_units: verified ? depositUnits : 0,
         remaining_usdc_base_units: verified ? depositUnits : 0,
         converted_usd_micros: 0,
@@ -164,7 +168,7 @@ for (const mode of [
       .getByRole("button", { name: "Funding", exact: true })
       .click();
     await expect(
-      page.getByRole("heading", { name: "Deposit USDC funding" }),
+      page.getByRole("heading", { name: `Deposit ${tokenLabel} funding` }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Add demo funding" }),
@@ -173,7 +177,17 @@ for (const mode of [
     await expect(page.getByText("Rewards waiting to be credited")).toHaveCount(
       0,
     );
-    await expect(page.getByLabel("USDC amount")).toBeVisible();
+    await expect(page.getByLabel(`${tokenLabel} amount`)).toBeVisible();
+    if (mode === "mock")
+      await expect(
+        page.getByText(/Test inventory: 10,000 Mock USD/),
+      ).toBeVisible();
+    if (mode === "mock")
+      await expect(
+        page.getByText(
+          "Mock USD is a custom test token. It is not Circle USDC and has no monetary value.",
+        ),
+      ).toBeVisible();
     if (mode === "manual") {
       await page.getByText("Already sent USDC from your wallet?").click();
       await page.getByLabel("Deposit transaction signature").fill(signature);
@@ -181,9 +195,9 @@ for (const mode of [
         .getByRole("button", { name: "Verify existing deposit" })
         .click();
     } else {
-      await page.getByLabel("USDC amount").fill(String(depositAmount));
+      await page.getByLabel(`${tokenLabel} amount`).fill(String(depositAmount));
       await page
-        .getByRole("button", { name: "Deposit USDC", exact: true })
+        .getByRole("button", { name: `Deposit ${tokenLabel}`, exact: true })
         .click();
       if (mode === "rejected") {
         await expect(page.locator(".form-panel [role=alert]")).toContainText(
@@ -192,7 +206,7 @@ for (const mode of [
         expect(posts).toBe(0);
         await expect(
           page.getByText(
-            `${depositAmount.toLocaleString("en-US")} USDC received`,
+            `${depositAmount.toLocaleString("en-US")} ${tokenLabel} received`,
             { exact: true },
           ),
         ).toHaveCount(0);
@@ -215,9 +229,12 @@ for (const mode of [
       }
     }
     await expect(
-      page.getByText(`${depositAmount.toLocaleString("en-US")} USDC received`, {
-        exact: true,
-      }),
+      page.getByText(
+        `${depositAmount.toLocaleString("en-US")} ${tokenLabel} received`,
+        {
+          exact: true,
+        },
+      ),
     ).toBeVisible();
     expect(preparations).toBe(mode === "manual" ? 0 : 1);
     if (mode !== "manual")

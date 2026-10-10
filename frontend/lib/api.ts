@@ -75,7 +75,9 @@ export type Impact = {
 };
 export type Funding = {
   usdc?: {
+    mock_usdc?: boolean;
     received_usdc_base_units: number;
+    inventory_usdc_base_units?: number;
     remaining_usdc_base_units: number;
     converted_usd_micros: number;
     distributed_loop_base_units: number;
@@ -85,6 +87,7 @@ export type Funding = {
       signature: string;
       amount_base_units: number;
       created_at: number;
+      is_inventory?: number;
     }[];
   };
   received_cents: number;
