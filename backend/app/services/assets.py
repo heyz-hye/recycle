@@ -16,7 +16,7 @@ from ..db import transaction
 from .common import now, uid, require
 
 log = logging.getLogger(__name__)
-DECIMALS = {"LOOP": 2, "USDC": 6, "SOL": 9}
+DECIMALS = {"LOOP": get_settings().token_decimals, "USDC": 6, "SOL": 9}
 
 
 def total(c, sql, params=()):

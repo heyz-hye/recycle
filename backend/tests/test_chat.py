@@ -41,8 +41,16 @@ def test_estimate_reward_matches_reward_rules_and_is_labeled_estimate(client):
         )
     assert bottles["estimated_amount_base_units"] == 5000  # 10 * 5 LOOP
     assert cardboard["estimated_amount_base_units"] == 4000  # 2kg * 20 LOOP
+    assert bottles["estimated_loop"] == 50
     assert bottles["is_estimate"] is True
     assert "estimate" in bottles["note"].lower()
+
+
+def test_to_loop_uses_platform_token_decimals():
+    # Platform units are hundredths of LOOP even though the Devnet mint has 9 decimals.
+    assert get_settings().token_decimals == 2
+    assert assistant.to_loop(24900) == 249
+    assert assistant.to_loop(16000) == 160
 
 
 def test_get_my_rewards_only_shows_confirmed_with_explorer_link(client):

@@ -1,5 +1,7 @@
 "use client";
-import { useEffect, useRef, useState, FormEvent, Fragment } from "react";
+import { useEffect, useRef, useState, FormEvent } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { MessageCircle, X, Send, Sprout } from "lucide-react";
 import { api, ApiError, ChatReply } from "@/lib/api";
 
@@ -12,19 +14,18 @@ const CHIPS = [
   "Community impact this week",
 ];
 
-const EXPLORER_PATTERN = /(https:\/\/explorer\.solana\.com\/tx\/[^\s)]+)/g;
+// react-markdown never renders raw HTML from the model, so no sanitizer is needed.
+const MARKDOWN_COMPONENTS: Components = {
+  a: ({ node: _node, ...props }) => (
+    <a {...props} target="_blank" rel="noopener noreferrer" />
+  ),
+};
 
-function renderWithLinks(text: string) {
-  // Splitting on a capturing group alternates plain text and matched links.
-  const parts = text.split(EXPLORER_PATTERN);
-  return parts.map((part, i) =>
-    i % 2 === 1 ? (
-      <a key={i} href={part} target="_blank" rel="noreferrer">
-        {part}
-      </a>
-    ) : (
-      <Fragment key={i}>{part}</Fragment>
-    ),
+function AssistantMarkdown({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
   );
 }
 
@@ -66,13 +67,19 @@ export default function Assistant() {
     <>
       <button
         className="assistant-fab"
-        aria-label={open ? "Close LoopMint Assistant" : "Open LoopMint Assistant"}
+        aria-label={
+          open ? "Close LoopMint Assistant" : "Open LoopMint Assistant"
+        }
         onClick={() => setOpen(!open)}
       >
         {open ? <X size={22} /> : <MessageCircle size={22} />}
       </button>
       {open && (
-        <div className="assistant-panel" role="dialog" aria-label="LoopMint Assistant">
+        <div
+          className="assistant-panel"
+          role="dialog"
+          aria-label="LoopMint Assistant"
+        >
           <div className="assistant-heading">
             <div>
               <strong>LoopMint Assistant</strong>
@@ -90,10 +97,17 @@ export default function Assistant() {
             {messages.length === 0 && (
               <div className="assistant-empty">
                 <Sprout size={22} />
-                <p>Ask about preparing materials, estimated rewards, your tokens, or community impact.</p>
+                <p>
+                  Ask about preparing materials, estimated rewards, your tokens,
+                  or community impact.
+                </p>
                 <div className="assistant-chips">
                   {CHIPS.map((chip) => (
-                    <button key={chip} onClick={() => void send(chip)} disabled={busy}>
+                    <button
+                      key={chip}
+                      onClick={() => void send(chip)}
+                      disabled={busy}
+                    >
                       {chip}
                     </button>
                   ))}
@@ -102,10 +116,18 @@ export default function Assistant() {
             )}
             {messages.map((m, i) => (
               <div key={i} className={`assistant-message ${m.role}`}>
-                {renderWithLinks(m.text)}
+                {m.role === "assistant" ? (
+                  <AssistantMarkdown text={m.text} />
+                ) : (
+                  m.text
+                )}
               </div>
             ))}
-            {busy && <div className="assistant-message assistant pending">Thinking…</div>}
+            {busy && (
+              <div className="assistant-message assistant pending">
+                Thinking…
+              </div>
+            )}
           </div>
           {error && (
             <p role="alert" className="error-text assistant-error">

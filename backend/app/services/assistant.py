@@ -22,7 +22,13 @@ SYSTEM_INSTRUCTION = (
     "the Python worker can do that; never imply otherwise. Reward estimates are estimates only; "
     "center staff determine the final accepted quantity and reward after physical inspection. "
     "LOOP is a Solana Devnet demo token with no real monetary value; say so if asked about value. "
-    "Use the provided tools to look up real data instead of guessing numbers."
+    "Use the provided tools to look up real data instead of guessing numbers. "
+    "Formatting: reply in short Markdown. Put each list item on its own line using Markdown "
+    "lists (numbered for counts or sequences, bullets otherwise). Never show reward IDs. "
+    "Describe each reward by its claim ID shortened to the first 8 characters, its amount in "
+    "LOOP (use amount_loop, never base units) and its status in plain words, e.g. "
+    "\"Claim `af24f6f2`: 160 LOOP, awaiting funding\". "
+    "Keep replies brief: answer the question, then stop."
 )
 
 PREP_GUIDES = {
@@ -63,6 +69,11 @@ def get_preparation_guide(c, user, args: PrepGuideArgs):
     }
 
 
+def to_loop(amount_base_units):
+    # Stored amounts use platform units (TOKEN_DECIMALS), not the mint's on-chain decimals.
+    return amount_base_units / 10 ** get_settings().token_decimals
+
+
 def estimate_reward(c, user, args: EstimateRewardArgs):
     rule = c.one("SELECT * FROM reward_rules WHERE material=?", (args.material,))
     quantity_in_rule_units = args.quantity * (1000 if args.material == "cardboard" else 1)
@@ -74,7 +85,7 @@ def estimate_reward(c, user, args: EstimateRewardArgs):
         "quantity": args.quantity,
         "unit": "kg" if args.material == "cardboard" else "bottles",
         "estimated_amount_base_units": amount_base_units,
-        "estimated_loop": amount_base_units / 100,
+        "estimated_loop": to_loop(amount_base_units),
         "is_estimate": True,
         "note": (
             "This is only an estimate computed from the current reward rate. "
@@ -90,6 +101,7 @@ def get_my_rewards(c, user, args: NoArgs):
         (user["id"],),
     )
     for reward in rewards:
+        reward["amount_loop"] = to_loop(reward["amount_base_units"])
         reward["explorer_url"] = (
             f"https://explorer.solana.com/tx/{reward['signature']}?cluster=devnet"
             if reward["state"] == "confirmed"

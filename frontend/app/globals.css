@@ -2466,9 +2466,64 @@ input[type="checkbox"] {
   background: #f3f6ee;
   color: var(--ink);
 }
+.assistant-message.user {
+  white-space: pre-wrap;
+}
 .assistant-message.assistant a {
   color: var(--forest);
   text-decoration: underline;
+}
+.assistant-message.assistant > :first-child {
+  margin-top: 0;
+}
+.assistant-message.assistant > :last-child {
+  margin-bottom: 0;
+}
+.assistant-message.assistant p {
+  margin: 0 0 8px;
+}
+.assistant-message.assistant ul,
+.assistant-message.assistant ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.assistant-message.assistant ul {
+  list-style: disc;
+}
+.assistant-message.assistant ol {
+  list-style: decimal;
+}
+.assistant-message.assistant li + li {
+  margin-top: 4px;
+}
+.assistant-message.assistant li > p {
+  margin: 0;
+}
+.assistant-message.assistant li > ul,
+.assistant-message.assistant li > ol {
+  margin: 4px 0 0;
+}
+.assistant-message.assistant strong {
+  font-weight: 600;
+}
+.assistant-message.assistant code {
+  background: #e3e9da;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+.assistant-message.assistant pre {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  background: #e3e9da;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+.assistant-message.assistant pre code {
+  padding: 0;
+  background: none;
 }
 .assistant-message.pending {
   color: var(--muted);
