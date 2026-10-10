@@ -29,10 +29,45 @@ def seed(c):
     c.execute("INSERT INTO funding_account (id) VALUES ('main') ON CONFLICT DO NOTHING")
     if get_settings().app_mode != "demo":
         return
+    # Example neighborhood coordinates, not verified public drop-off facilities.
+    # Never seed these locations into a Devnet/production database.
+    for center_id, name, address, latitude, longitude in [
+        (
+            "greenpoint",
+            "Greenpoint Recycling Center",
+            "Greenpoint, Brooklyn · Demo location",
+            40.7305,
+            -73.9544,
+        ),
+        (
+            "williamsburg",
+            "Williamsburg Demo Center",
+            "Williamsburg, Brooklyn · Demo location",
+            40.7145,
+            -73.9614,
+        ),
+        (
+            "downtown",
+            "Downtown Brooklyn Demo Center",
+            "Downtown Brooklyn · Demo location",
+            40.6925,
+            -73.9903,
+        ),
+    ]:
+        c.execute(
+            "INSERT INTO centers VALUES (?,?,?) ON CONFLICT DO NOTHING",
+            (center_id, name, address),
+        )
+        c.execute(
+            "INSERT INTO center_locations VALUES (?,?,?,1) ON CONFLICT DO NOTHING",
+            (center_id, latitude, longitude),
+        )
     for identity, name, role, center in [
         ("recycler", "Alex Morgan", "recycler", None),
         ("verifier", "Jamie Chen", "verifier", "greenpoint"),
         ("partner", "Green Future Fund", "funding_partner", None),
+        ("verifier-williamsburg", "Williamsburg Staff", "verifier", "williamsburg"),
+        ("verifier-downtown", "Downtown Staff", "verifier", "downtown"),
     ]:
         c.execute(
             "INSERT INTO users VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",

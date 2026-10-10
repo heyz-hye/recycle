@@ -73,7 +73,14 @@ export type Funding = {
     created_at: number;
   }[];
 };
-export type Center = { id: string; name: string; address: string };
+export type Center = {
+  id: string;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  is_demo: number;
+};
 export class ApiError extends Error {
   constructor(
     message: string,

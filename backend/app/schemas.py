@@ -79,8 +79,37 @@ class WalletLogin(StrictModel):
 
 
 class DemoLogin(StrictModel):
-    account: Literal["recycler", "verifier", "partner"]
+    account: Literal[
+        "recycler", "verifier", "partner", "verifier-williamsburg", "verifier-downtown"
+    ]
+
+
+class CenterConfiguration(StrictModel):
+    id: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9_-]+$")
+    name: str = Field(min_length=1, max_length=150)
+    address: str = Field(min_length=1, max_length=300)
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
 
 
 class RedemptionConfirm(StrictModel):
     signature: str = Field(min_length=64, max_length=100)
+
+
+class ChatMessage(StrictModel):
+    role: Literal["user", "model"]
+    text: str = Field(min_length=1, max_length=1200)
+
+
+class ChatInput(StrictModel):
+    messages: list[ChatMessage] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode="after")
+    def valid_conversation(self):
+        if sum(len(message.text) for message in self.messages) > 6000:
+            raise ValueError("Please shorten the conversation and try again.")
+        if self.messages[0].role != "user" or self.messages[-1].role != "user":
+            raise ValueError("The conversation must begin and end with your message.")
+        if any(a.role == b.role for a, b in zip(self.messages, self.messages[1:])):
+            raise ValueError("Conversation messages must alternate roles.")
+        return self

@@ -6,6 +6,8 @@ from solders.pubkey import Pubkey
 from .config import get_settings
 from .db import initialize, transaction
 from .services.common import uid
+from .schemas import CenterConfiguration
+from .services.centers import configure_center
 
 
 def main():
@@ -25,6 +27,15 @@ def main():
         "--role", choices=["recycler", "verifier", "funding_partner"], required=True
     )
     role.add_argument("--center", default=None)
+    center = sub.add_parser(
+        "configure-center",
+        help="Register or update a participating center and its verified coordinates",
+    )
+    center.add_argument("--id", required=True)
+    center.add_argument("--name", required=True)
+    center.add_argument("--address", required=True)
+    center.add_argument("--latitude", required=True, type=float)
+    center.add_argument("--longitude", required=True, type=float)
     sub.add_parser(
         "enable-timescale",
         help="Create the event hypertable and hourly continuous aggregate",
@@ -32,7 +43,25 @@ def main():
     args = parser.parse_args()
     get_settings().validate_runtime()
     initialize()
-    if args.command == "create-devnet-mint":
+    if args.command == "configure-center":
+        from pydantic import ValidationError
+
+        try:
+            data = CenterConfiguration(
+                **{
+                    key: getattr(args, key)
+                    for key in ("id", "name", "address", "latitude", "longitude")
+                }
+            )
+        except ValidationError as exc:
+            parser.error(str(exc))
+        with transaction() as c:
+            configure_center(c, data)
+        print(
+            "Center registered. Assign its staff wallet with grant-role --center "
+            + data.id
+        )
+    elif args.command == "create-devnet-mint":
         import json
         from solana.rpc.api import Client
         from solders.keypair import Keypair

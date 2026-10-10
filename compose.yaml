@@ -1,3 +1,9 @@
+x-backend-env: &backend_env
+  APP_MODE: demo
+  DATABASE_URL: postgresql://loopmint:local-demo-only@db:5432/loopmint
+  PUBLIC_ORIGIN: http://localhost:3000
+  DEMO_AUTO_WORKER: "false"
+
 services:
   db:
     image: postgres:17-alpine
@@ -16,11 +22,10 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    environment: &backend_env
-      APP_MODE: demo
-      DATABASE_URL: postgresql://loopmint:local-demo-only@db:5432/loopmint
-      PUBLIC_ORIGIN: http://localhost:3000
-      DEMO_AUTO_WORKER: "false"
+    environment:
+      <<: *backend_env
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:

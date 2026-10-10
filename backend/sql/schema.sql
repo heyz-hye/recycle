@@ -2,6 +2,12 @@ CREATE TABLE IF NOT EXISTS app_metadata (key TEXT PRIMARY KEY, value TEXT NOT NU
 CREATE TABLE IF NOT EXISTS centers (
  id TEXT PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS center_locations (
+ center_id TEXT PRIMARY KEY REFERENCES centers(id),
+ latitude DOUBLE PRECISION NOT NULL CHECK(latitude BETWEEN -90 AND 90),
+ longitude DOUBLE PRECISION NOT NULL CHECK(longitude BETWEEN -180 AND 180),
+ is_demo BIGINT NOT NULL DEFAULT 0 CHECK(is_demo IN (0,1))
+);
 CREATE TABLE IF NOT EXISTS users (
  id TEXT PRIMARY KEY, wallet TEXT UNIQUE NOT NULL, username TEXT NOT NULL,
  role TEXT NOT NULL CHECK(role IN ('recycler','verifier','funding_partner')),

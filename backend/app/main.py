@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from .config import get_settings
 from .db import initialize
-from .routes import auth, claims, dashboard
+from .routes import auth, claims, dashboard, chatbot
 
 
 async def demo_worker():
@@ -68,5 +68,5 @@ def health():
     }
 
 
-for router in (auth.router, claims.router, dashboard.router):
+for router in (auth.router, claims.router, dashboard.router, chatbot.router):
     app.include_router(router, prefix="/api")

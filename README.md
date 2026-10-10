@@ -1,6 +1,6 @@
 # LoopMint
 
-A recycling rewards MVP with a Next.js interface and Python/FastAPI backend. Recycling center staff confirm physical intake; the backend calculates funded token rewards from their measured quantities. No Gemini, AI verification, hosted posts, or community feed.
+A recycling rewards MVP with a Next.js interface and Python/FastAPI backend. Recycling center staff confirm physical intake; the backend calculates funded token rewards from their measured quantities. An optional Gemini-powered help chat answers LoopMint and recycling questions. There is no AI verification, hosted posting, or community feed.
 
 ## Run the local demo
 
@@ -10,10 +10,12 @@ A recycling rewards MVP with a Next.js interface and Python/FastAPI backend. Rec
 
 Open **http://localhost:3000**. The script installs project dependencies, uses Python 3.12 through `uv` (or an installed `python3.12`), and downloads a project-local Node 22 runtime if your installed Node is older. It starts the API, demo reward worker, and frontend. Requires npm and either uv or Python 3.12. Ctrl+C stops the services.
 
-The default demo needs no wallet, cloud account, API key, or Docker. SQLite data persists in `.data/loopmint.db`. It starts with three clearly labeled demo accounts and $500 of simulated funding. Tokens, burns, and payouts are **simulated**, not blockchain transactions. Signing in with an actual wallet while in demo mode still uses the simulated token service.
+The default demo needs no wallet, cloud account, API key, or Docker. SQLite data persists in `.data/loopmint.db`. It starts with five clearly labeled demo accounts (a recycler, three center staff accounts, and a funding partner) and $500 of simulated funding. Tokens, burns, and payouts are **simulated**, not blockchain transactions. Signing in with an actual wallet while in demo mode still uses the simulated token service.
 
-1. Enter the recycler demo. Create a drop-off for 2 kg of cardboard and copy the QR ticket code.
-2. Switch **Demo view → Center staff**. Scan or paste the ticket, enter the accepted quantity, and confirm physical receipt.
+To enable the chat assistant, create a Gemini API key in [Google AI Studio](https://aistudio.google.com/app/apikey), put it in `GEMINI_API_KEY` in the repository-root `.env`, and restart the API. The assistant appears in the signed-in workspace. Without a key, the rest of the demo still runs and the assistant reports that it is not configured. Keep the key on the server and out of source control.
+
+1. Enter the recycler demo. Open **New drop-off**, enter 2 kg of cardboard, and choose a center manually or click **Use my location**. Create the ticket and copy its QR code text.
+2. Switch **Demo view → Center staff** for the selected center (Greenpoint, Williamsburg, or Downtown). Scan or paste the ticket, enter the accepted quantity, and confirm physical receipt.
 3. Switch back to the recycler. Within a few seconds, 40 LOOP appears as received. Center approval and transaction confirmation have separate states.
 4. Open **Share** to edit the generated caption, use the device share action, or download the PNG card. Content is generated in the browser and published by the user on their own platform.
 5. Open **My wallet** for history and simulated redemption. Open **Funding partner** to add simulated funding and inspect reservations.
@@ -25,14 +27,38 @@ API documentation: http://127.0.0.1:8000/docs.
 - Recycler, assigned center verifier, and funding partner roles, enforced by the API.
 - Wallet Standard sign-in with one-time Ed25519 challenges and HttpOnly session cookies. New wallets always receive recycler access. Trusted roles are provisioned with an operator command.
 - Plastic bottle counts and integer-gram cardboard submissions, unique expiring QR tickets, camera scanning where supported, manual code entry, and ticket renewal.
+- Opt-in GPS center discovery, nearest-center selection, approximate distances, manual search, and tickets tied to the selected participating center.
 - Physical receipt confirmation, measured quantities, partial acceptance, rejection reasons, center restrictions, and self-approval prevention.
 - Rate snapshots, separate verification/payment states, integer reward calculations, atomic funding reservations, waiting-for-funding processing, and idempotent approvals/deposits/redemptions.
 - A durable worker with signed-transaction persistence before broadcast, signature reconciliation, and duplicate-safe retries. Distinct rewards include unique on-chain memos even when amounts and wallets match.
 - A real Solana Devnet SPL minting/burn adapter plus an explicitly simulated local adapter.
 - Wallet reward/redemption history, Devnet explorer links for actual signatures, aggregate impact and funding dashboards, and five-second polling.
 - Browser-only share captions and PNG cards, editable previews, copy/download fallbacks, canceled sharing behavior, and no server-side social content.
+- Authenticated Gemini help chat with short conversation context, response limits, per-account request throttling, and no wallet or account data sent to the model.
 - PostgreSQL through Psycopg 3, local SQLite fallback, and an optional TimescaleDB hypertable/continuous aggregate migration.
 - Docker definitions, a local launch script, backend tests against SQLite or PostgreSQL, and desktop/mobile Playwright flows.
+
+## Find a recycling center
+
+In **New drop-off**, click **Use my location** and allow the browser's location request. Centers with registered coordinates are sorted by straight-line distance and the nearest listed center is selected. You can choose another center before creating the ticket. Search by name or neighborhood works without location access. Permission denial, unavailable GPS, and timeouts all retain manual selection.
+
+Location is requested only on click and stays in browser memory until the page is closed, the form is left, or **Clear location** is used. The API receives only the selected center ID, never the recycler's coordinates. Distances are approximate, not travel routes. Browser geolocation requires HTTPS or localhost. A distant nearest result does not mean a center operates near you.
+
+The demo includes **sample Brooklyn locations**, not verified public drop-off facilities. These samples have no directions links. In production, only registered participating centers can receive tickets, because their assigned staff must confirm intake. The app does not search a public directory of unrelated facilities.
+
+Register a participating center using its verified address and coordinates:
+
+```bash
+PYTHONPATH=backend .venv/bin/python -m app.cli configure-center \
+  --id YOUR_CENTER_ID --name 'Your center name' --address 'Verified street address' \
+  --latitude YOUR_LATITUDE --longitude YOUR_LONGITUDE
+
+PYTHONPATH=backend .venv/bin/python -m app.cli grant-role \
+  --wallet YOUR_CENTER_WALLET --username 'Center staff' \
+  --role verifier --center YOUR_CENTER_ID
+```
+
+Refresh the app to load new centers. Reusing a center ID updates its name, address, and coordinates while preserving existing tickets. Coordinates are validated and stored in an additive `center_locations` table; existing centers without coordinates remain manually selectable. Configured real centers offer a Google Maps directions link containing only the destination. Demo seeding does not overwrite operator-configured coordinates.
 
 ## Configuration
 
@@ -49,6 +75,8 @@ Copy `backend/.env.example` to the repository root as `.env`. Never commit keys 
 | `SOLANA_RPC_URL` | Devnet RPC; the adapter verifies the network genesis hash |
 | `SOLANA_MINT` | A classic SPL Token mint with exactly two decimals |
 | `SOLANA_ISSUER_KEYPAIR` | Server-side path to the mint authority/payer keypair JSON |
+| `GEMINI_API_KEY` | Optional server-only Gemini key for the help chat |
+| `GEMINI_MODEL` | Gemini model ID; defaults to `gemini-3.8-flash` |
 
 `API_URL` is a **frontend build-time** setting for Next.js's `/api` proxy; defaults to `http://127.0.0.1:8000`. Browser requests remain same-origin. Keep the Python API behind that proxy or private networking when deployed.
 
@@ -92,7 +120,7 @@ Devnet redemption prepares an exact burn transaction. The user authorizes it in 
 
 Bottles earn 5 LOOP each; cardboard earns 20 LOOP/kg. The token base unit is 0.01 LOOP. Store grams and base units as integers. The configured rates produce exact integer results; reward calculation floors division. Reserve demo cents **upward** to cover fractional LOOP. Redemptions accept whole LOOP only, at 1 LOOP = 1 simulated cent.
 
-All authoritative writes use a transaction. PostgreSQL uses a shared transaction-scoped advisory lock across API and worker; SQLite uses `BEGIN IMMEDIATE`. This deliberately serializes writes for the one-center MVP. Unique constraints additionally enforce one verification, reward, and job per claim. For higher traffic, replace the global lock with a consistent row-lock order after load testing.
+All authoritative writes use a transaction. PostgreSQL uses a shared transaction-scoped advisory lock across API and worker; SQLite uses `BEGIN IMMEDIATE`. This deliberately serializes writes for the MVP. Unique constraints additionally enforce one verification, reward, and job per claim. For higher traffic, replace the global lock with a consistent row-lock order after load testing.
 
 The worker commits signed bytes, signature, and last valid block height before broadcasting. A lost network response causes reconciliation of the same signature; retries rebroadcast identical bytes. Failed/expired transactions are marked `needs_review` and keep funding reserved. Operators must check the stored signature on Devnet before recovery; no automatic re-mint occurs. Inspect `reward_jobs.last_error` and the worker logs. This is intentionally conservative around uncertain transactions.
 
@@ -131,7 +159,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Use Node 22+ for npm commands, or prepend `.tools/node_modules/node/bin` to `PATH` after the launch script has installed its local runtime. Browser tests create demo claims and funding records; run them against a demo database. They cover desktop and mobile layouts, submission/approval/reward flow, PNG downloads, share cancellation/fallbacks, simulated redemption, funding, and rejection.
+Use Node 22+ for npm commands, or prepend `.tools/node_modules/node/bin` to `PATH` after the launch script has installed its local runtime. Browser tests create demo claims and funding records; run them against a demo database. They cover desktop and mobile layouts, submission/approval/reward flow, PNG downloads, share cancellation/fallbacks, simulated redemption, funding, rejection, GPS permission/failure cases, nearest-center ticket selection, manual overrides, and location privacy. GPS tests use mocked positions, not your device location.
 
 ## Deployment and remaining setup
 
@@ -142,3 +170,5 @@ Hosting, domain registration, cloud credentials, and a real funding agreement ar
 Requirements: [MVP_PLAN.md](MVP_PLAN.md). Revised planning document: [PDF](output/pdf/Recycling_Rewards_MVP_Center_Verified.pdf).
 
 Implementation references: [Next.js installation](https://nextjs.org/docs/app/getting-started/installation), [Psycopg transactions](https://www.psycopg.org/psycopg3/docs/basic/transactions.html), [Solana.py SPL instructions](https://michaelhly.com/solana-py/spl/token/instructions/), [Timescale continuous aggregates](https://www.tigerdata.com/docs/learn/continuous-aggregates).
+
+Location references: [Browser geolocation](https://developer.mozilla.org/en-US/docs/Web/API/Geolocation/getCurrentPosition), [Google Maps destination URLs](https://developers.google.com/maps/documentation/urls/get-started).

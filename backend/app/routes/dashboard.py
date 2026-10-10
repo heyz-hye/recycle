@@ -13,7 +13,10 @@ router = APIRouter()
 @router.get("/centers")
 def centers(user=Depends(current_user)):
     with transaction(write=False) as c:
-        return c.all("SELECT * FROM centers ORDER BY name")
+        return c.all(
+            "SELECT c.*, l.latitude, l.longitude, COALESCE(l.is_demo,0) AS is_demo "
+            "FROM centers c LEFT JOIN center_locations l ON l.center_id=c.id ORDER BY c.name"
+        )
 
 
 @router.get("/impact")
