@@ -1,16 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, MapPin, RefreshCw } from "lucide-react";
 import { api, Center } from "@/lib/api";
-import {
-  Coordinates,
-  formatDistance,
-  hasCoordinates,
-  distanceKm,
-} from "@/lib/location";
+import { Coordinates, formatDistance } from "@/lib/location";
 import {
   loadGoogleMaps,
   nearbyPlaces,
+  mergeRegisteredPlaces,
   NearbyPlace,
   googleDirections,
   safeProviderUrl,
@@ -38,13 +34,15 @@ export default function GoogleCenterMap({
   const map = useRef<google.maps.Map | null>(null);
   const markers = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const accuracyCircle = useRef<google.maps.Circle | null>(null);
-  const lastFit = useRef<{
-    places: NearbyPlace[];
-    position: Coordinates;
-    radius: number;
-  } | null>(null);
+  const lastFit = useRef("");
   const [places, setPlaces] = useState<NearbyPlace[]>([]);
   const [radius, setRadius] = useState(10000);
+  const [unavailableIds, setUnavailableIds] = useState<string[]>([]);
+  const results = useMemo(
+    () =>
+      mergeRegisteredPlaces(places, centers, position, radius, unavailableIds),
+    [places, centers, position, radius, unavailableIds],
+  );
   const [retry, setRetry] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -132,6 +130,12 @@ export default function GoogleCenterMap({
           }),
         ]);
         if (cancelled) return;
+        setUnavailableIds(
+          result.places
+            .filter((p) => p.businessStatus === "CLOSED_PERMANENTLY")
+            .map((p) => p.id)
+            .filter((id): id is string => !!id),
+        );
         setPlaces(nearbyPlaces(result.places, position, radius));
         setSearched(true);
       } catch (e) {
@@ -204,7 +208,7 @@ export default function GoogleCenterMap({
       });
     const bounds = new google.maps.LatLngBounds();
     bounds.extend(origin);
-    places.forEach((place, index) => {
+    results.forEach((place, index) => {
       const location = {
         lat: place.location.latitude,
         lng: place.location.longitude,
@@ -212,41 +216,29 @@ export default function GoogleCenterMap({
       marker(
         location,
         place.name,
-        String(index + 1),
-        place.id === active ? "#173e35" : "#7d582a",
-        () => setActive(place.id),
+        place.registeredListing ? "L" : String(index + 1),
+        place.id === active
+          ? "#173e35"
+          : place.registeredCenterId
+            ? "#668440"
+            : "#7d582a",
+        () => {
+          setActive(place.id);
+          if (place.registeredCenterId && !disabledRef.current)
+            selectRef.current(place.registeredCenterId);
+        },
       );
       bounds.extend(location);
     });
-    centers
-      .filter(
-        (c) =>
-          !c.is_demo &&
-          hasCoordinates(c) &&
-          distanceKm(position, c) < radius / 1000 &&
-          !places.some((p) => p.id === c.google_place_id),
-      )
-      .forEach((c) => {
-        const location = { lat: c.latitude!, lng: c.longitude! };
-        marker(
-          location,
-          c.name,
-          "L",
-          c.id === selected ? "#173e35" : "#668440",
-          () => {
-            if (!disabledRef.current) selectRef.current(c.id);
-          },
-        );
-        bounds.extend(location);
-      });
-    if (
-      lastFit.current?.places !== places ||
-      lastFit.current?.position !== position ||
-      lastFit.current?.radius !== radius
-    ) {
+    const fitKey = JSON.stringify([
+      position,
+      radius,
+      results.map((p) => [p.id, p.location]),
+    ]);
+    if (lastFit.current !== fitKey) {
       if (markers.current.length > 1) currentMap.fitBounds(bounds, 45);
       else currentMap.setZoom(13);
-      lastFit.current = { places, position, radius };
+      lastFit.current = fitKey;
     }
     return () => {
       markers.current.forEach((marker) => {
@@ -256,7 +248,7 @@ export default function GoogleCenterMap({
     };
   }, [
     ready,
-    places,
+    results,
     centers,
     selected,
     position,
@@ -332,22 +324,23 @@ export default function GoogleCenterMap({
           {error ? "Retry Google search" : "Refresh nearby results"}
         </button>
       )}
-      {!busy && !error && searched && !places.length && (
+      {!busy && !error && searched && !results.length && (
         <p className="small muted">
           No recycling listings were returned within {radius / 1000} km. Try a
           larger radius. Google may not list every facility.
         </p>
       )}
-      {!!places.length && !error && ready && (
+      {!!results.length && (
         <>
           <p className="small muted">
-            Results from Google Maps, ordered by straight-line distance. Confirm
-            opening hours and accepted materials before traveling.
+            Registered centers and Google Maps listings, ordered by
+            straight-line distance. Confirm opening hours and accepted materials
+            before traveling.
           </p>
           <ol className="google-place-list">
-            {places.map((place, index) => {
+            {results.map((place, index) => {
               const enrolled = centers.find(
-                (c) => !c.is_demo && c.google_place_id === place.id,
+                (c) => !c.is_demo && c.id === place.registeredCenterId,
               );
               return (
                 <li
@@ -371,7 +364,14 @@ export default function GoogleCenterMap({
                   <p>{place.address}</p>
                   <strong className="small">
                     {formatDistance(place.distance)}
-                    {index === 0 ? " · Closest result" : ""}
+                    {index === 0
+                      ? accuracy !== null &&
+                        results.length > 1 &&
+                        (results[1].distance - place.distance) * 1000 <=
+                          2 * accuracy
+                        ? " · Similar distance to next result; location accuracy may change the order"
+                        : " · Closest result"
+                      : ""}
                   </strong>
                   <p
                     className="small muted"

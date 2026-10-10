@@ -1,4 +1,10 @@
-import { Coordinates, distanceKm, validCoordinates } from "./location";
+import {
+  Coordinates,
+  distanceKm,
+  validCoordinates,
+  hasCoordinates,
+} from "./location";
+import type { Center } from "./api";
 
 declare global {
   interface Window {
@@ -56,6 +62,8 @@ export type NearbyPlace = {
   address: string;
   location: Coordinates;
   distance: number;
+  registeredCenterId?: string;
+  registeredListing?: boolean;
   attributions: { provider: string; providerURI: string | null }[];
 };
 
@@ -99,12 +107,54 @@ export function nearbyPlaces(
     .sort((a, b) => a.distance - b.distance);
 }
 
+// Keep operator-registered locations selectable even if Google's top results
+// omit them. Match enrollment only by exact Place ID, never by business name.
+export function mergeRegisteredPlaces(
+  places: NearbyPlace[],
+  centers: Center[],
+  origin: Coordinates,
+  radius: number,
+  unavailablePlaceIds: string[] = [],
+): NearbyPlace[] {
+  const results = places.map((place) => ({ ...place }));
+  for (const center of centers) {
+    if (
+      center.is_demo ||
+      !hasCoordinates(center) ||
+      (center.google_place_id &&
+        unavailablePlaceIds.includes(center.google_place_id))
+    )
+      continue;
+    const distance = distanceKm(origin, center);
+    if (distance > radius / 1000) continue;
+    const match = results.find((place) => place.id === center.google_place_id);
+    if (match) {
+      match.registeredCenterId = center.id;
+      continue;
+    }
+    results.push({
+      id: center.google_place_id || `center:${center.id}`,
+      registeredCenterId: center.id,
+      registeredListing: true,
+      name: center.name,
+      address: center.address,
+      location: { latitude: center.latitude, longitude: center.longitude },
+      distance,
+      attributions: [],
+    });
+  }
+  return results.sort(
+    (a, b) => a.distance - b.distance || a.id.localeCompare(b.id),
+  );
+}
+
 export function googleDirections(place: NearbyPlace) {
   const query = new URLSearchParams({
     api: "1",
     destination: `${place.location.latitude},${place.location.longitude}`,
-    destination_place_id: place.id,
   });
+  if (!place.id.startsWith("center:"))
+    query.set("destination_place_id", place.id);
   return `https://www.google.com/maps/dir/?${query}`;
 }
 
