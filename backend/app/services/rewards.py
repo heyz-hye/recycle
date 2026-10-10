@@ -2,6 +2,18 @@ from .common import uid, now, require
 
 
 def reserve(c, reward):
+    from .assets import remaining_fund, loop_inventory_available
+    from ..config import get_settings
+
+    if remaining_fund(c) < reward["cost_cents"] * 10000:
+        return False
+    if get_settings().app_mode != "demo":
+        try:
+            if loop_inventory_available(c) < reward["amount_base_units"]:
+                return False
+        except Exception:
+            # Missing inventory/configuration keeps the reward awaiting funding.
+            return False
     result = c.execute(
         "UPDATE funding_account SET available_cents=available_cents-?, reserved_cents=reserved_cents+? WHERE id='main' AND available_cents>=?",
         (reward["cost_cents"], reward["cost_cents"], reward["cost_cents"]),
@@ -51,6 +63,7 @@ def create_reward(c, claim, amount):
             now(),
         ),
     )
+    c.execute("INSERT INTO reward_custody VALUES (?,'internal')", (reward["id"],))
     reserve(c, reward)
 
 

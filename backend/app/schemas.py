@@ -129,3 +129,20 @@ class CenterConfiguration(StrictModel):
 
 class RedemptionConfirm(StrictModel):
     signature: str = Field(min_length=64, max_length=100)
+
+
+class ConversionQuoteInput(StrictModel):
+    loop_base_units: int = Field(gt=0, le=1000000000, strict=True)
+    asset: Literal["USDC", "SOL"]
+
+
+class ConversionInput(StrictModel):
+    quote_id: str = Field(min_length=1, max_length=100)
+    request_key: str = Field(min_length=8, max_length=100)
+
+
+class WithdrawalInput(StrictModel):
+    asset: Literal["LOOP", "USDC", "SOL"]
+    amount_base_units: int = Field(gt=0, le=9000000000000000, strict=True)
+    destination: str = Field(min_length=32, max_length=44)
+    request_key: str = Field(min_length=8, max_length=100)

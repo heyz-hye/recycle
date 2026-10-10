@@ -68,6 +68,7 @@ import {
 import { wallets, loginWallet, signBurn } from "@/lib/wallet";
 import Modal from "@/components/Modal";
 import Share from "@/components/Share";
+import AssetWallet from "@/components/AssetWallet";
 import { canShareReward } from "@/lib/sharing";
 import Scanner from "@/components/Scanner";
 import CenterPicker from "@/components/CenterPicker";
@@ -925,50 +926,12 @@ export default function Home() {
                 title="Good things come around."
                 text="Your rewards, from center confirmation to your wallet."
               />
-              <div className="wallet-grid">
-                <div className="wallet-card">
-                  <span className="hero-kicker">AVAILABLE BALANCE</span>
-                  <div>
-                    {tokens(wallet?.balance_base_units || 0)}{" "}
-                    <small>LOOP</small>
-                  </div>
-                  <p>
-                    {tokens(wallet?.pending_base_units || 0)} LOOP awaiting
-                    funding or transaction confirmation
-                  </p>
-                  <button
-                    className="button lime"
-                    disabled={!wallet || wallet.balance_base_units < 100}
-                    onClick={() => setShowRedeem(true)}
-                  >
-                    Simulate redemption <ArrowUpRight size={17} />
-                  </button>
-                  <span className="wallet-label">
-                    {demo ? "Simulated tokens" : "Solana Devnet tokens"} · No
-                    real monetary value
-                  </span>
-                </div>
-                <div className="panel wallet-explainer">
-                  <ShieldCheck size={30} />
-                  <h2>Confirmed means received.</h2>
-                  <p>
-                    Rewards become available once the token transaction is
-                    confirmed. Center approval is the first step.
-                  </p>
-                  <p className="small">
-                    Demo conversion: 1 LOOP = $0.01 of simulated credit. No
-                    actual money is paid.
-                  </p>
-                  {!demo && (
-                    <button
-                      className="button secondary"
-                      onClick={() => setShowConnect(true)}
-                    >
-                      Reconnect wallet
-                    </button>
-                  )}
-                </div>
-              </div>
+              <AssetWallet
+                key={user.id}
+                user={user}
+                onConnect={() => setShowConnect(true)}
+                onUpdated={load}
+              />
               <section className="panel">
                 <div className="panel-heading">
                   <h2>Reward history</h2>
@@ -990,7 +953,7 @@ export default function Home() {
                       <strong className="green">
                         +{tokens(r.amount_base_units)} LOOP
                       </strong>
-                      {r.signature && !r.signature.startsWith("demo:") && (
+                      {r.signature && !r.signature.includes(":") && (
                         <a
                           className="icon-button"
                           href={explorer(r.signature)}

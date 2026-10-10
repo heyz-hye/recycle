@@ -247,7 +247,7 @@ def test_signed_wallet_link_preserves_identity_and_blocks_other_owner(client):
     )
 
 
-def test_devnet_requires_linked_wallet_before_claim(client, monkeypatch):
+def test_devnet_allows_earning_before_wallet_is_linked(client, monkeypatch):
     register(client)
     monkeypatch.setenv("APP_MODE", "devnet")
     get_settings.cache_clear()
@@ -258,7 +258,7 @@ def test_devnet_requires_linked_wallet_before_claim(client, monkeypatch):
             "items": [{"material": "bottles", "unit": "count", "quantity": 1}],
         },
     )
-    assert result.status_code == 400 and "Link your Solana wallet" in result.text
+    assert result.status_code == 201
 
 
 def test_tiger_connections_require_tls():

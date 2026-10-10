@@ -12,6 +12,7 @@ from solders.signature import Signature
 from solders.transaction import Transaction
 from solders.message import Message
 from solders.instruction import Instruction
+from solders.system_program import transfer, TransferParams
 from spl.token.constants import TOKEN_PROGRAM_ID
 from spl.token.instructions import (
     create_idempotent_associated_token_account,
@@ -20,14 +21,21 @@ from spl.token.instructions import (
     MintToCheckedParams,
     burn_checked,
     BurnCheckedParams,
+    transfer_checked,
+    TransferCheckedParams,
 )
 from spl.token.client import Token
 from ..config import get_settings
 
 
 class DemoChain:
+    prefix = "demo"
+
+    def __init__(self, prefix="demo"):
+        self.prefix = prefix
+
     def prepare(self, reward, wallet):
-        signature = f"demo:{reward['id']}"
+        signature = f"{self.prefix}:{reward['id']}"
         return {
             "transaction_b64": base64.b64encode(signature.encode()).decode(),
             "signature": signature,
@@ -39,6 +47,9 @@ class DemoChain:
 
     def broadcast(self, transaction_b64):
         return None
+
+    def prepare_withdrawal(self, row):
+        return self.prepare({"id": "withdrawal:" + row["id"]}, row["destination"])
 
 
 class SolanaChain:
@@ -59,10 +70,16 @@ class SolanaChain:
         )
         self.mint = Pubkey.from_string(cfg.solana_mint)
         info = Token(self.rpc, self.mint, TOKEN_PROGRAM_ID, self.issuer).get_mint_info()
-        if info.decimals != 2 or info.mint_authority != self.issuer.pubkey():
-            raise RuntimeError(
-                "Mint must have 2 decimals and the configured issuer as mint authority."
-            )
+        if not 2 <= info.decimals <= 9:
+            raise RuntimeError("LOOP requires a classic SPL mint with 2 to 9 decimals.")
+        self.loop_decimals = info.decimals
+
+    def loop_chain_units(self, amount):
+        return amount * 10 ** (getattr(self, "loop_decimals", 2) - 2)
+
+    def loop_supply(self):
+        info = Token(self.rpc, self.mint, TOKEN_PROGRAM_ID, self.issuer).get_mint_info()
+        return info.supply // 10 ** (info.decimals - 2)
 
     def prepare(self, reward, wallet):
         owner = Pubkey.from_string(wallet)
@@ -77,8 +94,8 @@ class SolanaChain:
                     mint=self.mint,
                     dest=ata,
                     mint_authority=self.issuer.pubkey(),
-                    amount=reward["amount_base_units"],
-                    decimals=2,
+                    amount=self.loop_chain_units(reward["amount_base_units"]),
+                    decimals=getattr(self, "loop_decimals", 2),
                 )
             ),
             Instruction(
@@ -87,6 +104,96 @@ class SolanaChain:
                 [],
             ),
         ]
+        block = self.rpc.get_latest_blockhash().value
+        tx = Transaction.new_signed_with_payer(
+            instructions, self.issuer.pubkey(), [self.issuer], block.blockhash
+        )
+        return {
+            "transaction_b64": base64.b64encode(bytes(tx)).decode(),
+            "signature": str(tx.signatures[0]),
+            "last_valid_block_height": block.last_valid_block_height,
+        }
+
+    def usdc_mint(self):
+        if (
+            get_settings().solana_usdc_mint
+            != "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+        ):
+            raise ValueError("Only Circle's Solana Devnet USDC mint is supported.")
+        mint = Pubkey.from_string(get_settings().solana_usdc_mint)
+        info = Token(self.rpc, mint, TOKEN_PROGRAM_ID, self.issuer).get_mint_info()
+        if info.decimals != 6:
+            raise ValueError("USDC requires a classic SPL mint with 6 decimals.")
+        return mint
+
+    def asset_balance(self, asset):
+        if asset == "SOL":
+            return max(
+                0,
+                self.rpc.get_balance(self.issuer.pubkey()).value
+                - get_settings().treasury_fee_reserve_lamports,
+            )
+        if asset == "LOOP":
+            account = get_associated_token_address(self.issuer.pubkey(), self.mint)
+            units = int(self.rpc.get_token_account_balance(account).value.amount)
+            return units // 10 ** (self.loop_decimals - 2)
+        if asset == "USDC":
+            account = get_associated_token_address(
+                self.issuer.pubkey(), self.usdc_mint()
+            )
+            return int(self.rpc.get_token_account_balance(account).value.amount)
+        raise ValueError("Unsupported treasury asset.")
+
+    def check_payout(self, asset, amount):
+        reserve = get_settings().treasury_fee_reserve_lamports
+        if self.rpc.get_balance(self.issuer.pubkey()).value < reserve + (
+            amount if asset == "SOL" else 0
+        ):
+            raise ValueError("Treasury needs Devnet SOL for transfers and fees.")
+        if asset in ("LOOP", "USDC") and self.asset_balance(asset) < amount:
+            raise ValueError("Treasury needs more tokens of the selected asset.")
+
+    def prepare_withdrawal(self, row):
+        self.check_payout(row["asset"], row["amount_base_units"])
+        owner = Pubkey.from_string(row["destination"])
+        if row["asset"] == "SOL":
+            instructions = [
+                transfer(
+                    TransferParams(
+                        from_pubkey=self.issuer.pubkey(),
+                        to_pubkey=owner,
+                        lamports=row["amount_base_units"],
+                    )
+                )
+            ]
+        else:
+            is_loop = row["asset"] == "LOOP"
+            mint = self.mint if is_loop else self.usdc_mint()
+            instructions = [
+                create_idempotent_associated_token_account(
+                    self.issuer.pubkey(), owner, mint
+                ),
+                transfer_checked(
+                    TransferCheckedParams(
+                        program_id=TOKEN_PROGRAM_ID,
+                        source=get_associated_token_address(self.issuer.pubkey(), mint),
+                        mint=mint,
+                        dest=get_associated_token_address(owner, mint),
+                        owner=self.issuer.pubkey(),
+                        amount=self.loop_chain_units(row["amount_base_units"])
+                        if is_loop
+                        else row["amount_base_units"],
+                        decimals=getattr(self, "loop_decimals", 2) if is_loop else 6,
+                    )
+                ),
+            ]
+        instructions.append(
+            Instruction(
+                Pubkey.from_string("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
+                f"LoopMint withdrawal:{row['id']}".encode(),
+                [],
+            )
+        )
         block = self.rpc.get_latest_blockhash().value
         tx = Transaction.new_signed_with_payer(
             instructions, self.issuer.pubkey(), [self.issuer], block.blockhash

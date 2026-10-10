@@ -32,10 +32,6 @@ def submit(body: ClaimInput, user=Depends(current_user)):
     require(
         user["role"] == "recycler", "Use a recycler account to submit a drop-off.", 403
     )
-    require(
-        get_settings().app_mode == "demo" or not user["wallet"].startswith("account:"),
-        "Link your Solana wallet in My account before creating a Devnet ticket.",
-    )
     with transaction() as c:
         require(
             c.one("SELECT id FROM centers WHERE id=?", (body.center_id,)),

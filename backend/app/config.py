@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     solana_mint: str = ""
     solana_issuer_keypair: str = ""
     token_decimals: int = 2
+    # Devnet-only payout assets. Set the official Circle Devnet USDC mint.
+    solana_usdc_mint: str = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+    treasury_fee_reserve_lamports: int = 10000000
 
     def validate_runtime(self):
         parsed = urlsplit(self.database_url)
@@ -36,7 +39,7 @@ class Settings(BaseSettings):
                 )
         if self.token_decimals != 2:
             raise ValueError(
-                "The MVP uses two token decimals; configure the mint accordingly."
+                "Platform accounting uses two LOOP decimals; the on-chain mint may use 2 to 9."
             )
         if self.app_mode == "devnet" and not self.database_url.startswith("postgres"):
             raise ValueError("Devnet mode requires PostgreSQL.")
