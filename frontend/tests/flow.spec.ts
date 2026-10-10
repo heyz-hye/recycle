@@ -133,16 +133,14 @@ test("complete center-confirmed reward and external sharing flow", async ({
     page.getByRole("heading", { name: "Good things come around." }),
   ).toBeVisible();
   expect(await page.locator('a[href*="explorer.solana.com"]').count()).toBe(0);
-  await page
-    .getByRole("button", { name: "Simulate redemption", exact: true })
-    .click();
-  await dialog.getByLabel("Whole LOOP tokens to redeem").fill("1");
-  await dialog
-    .getByRole("button", { name: "Confirm simulated redemption" })
-    .click();
+  await page.getByRole("button", { name: "Convert LOOP", exact: true }).click();
+  await dialog.getByLabel("LOOP amount").fill("1");
+  await dialog.getByRole("button", { name: "Preview conversion" }).click();
+  await expect(dialog.locator(".quote-preview")).toContainText("You receive");
+  await dialog.getByRole("button", { name: "Confirm conversion" }).click();
   await expect(dialog).not.toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Simulated redemptions" }),
+    page.getByRole("heading", { name: "Conversion history" }),
   ).toBeVisible();
   await nav(page, "Our impact");
   await expect(

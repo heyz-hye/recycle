@@ -277,3 +277,70 @@ test("late Google results cannot restore cleared location", async ({
   );
   await expect(page.locator(".google-discovery")).toHaveCount(0);
 });
+
+test("registered ecoATM remains selectable when Google omits it", async ({
+  page,
+}) => {
+  await setup(page, [
+    {
+      id: "greenpoint",
+      name: "ecoATM",
+      address: "71-04 Kissena Blvd, Flushing, NY 11367, USA",
+      latitude: 40.7307,
+      longitude: -73.9544,
+      is_demo: 0,
+      google_place_id: "registered-ecoatm",
+    },
+  ]);
+  await page
+    .getByRole("button", { name: "Use my location", exact: true })
+    .click();
+  const row = page
+    .locator(".google-place-list li")
+    .filter({ hasText: "71-04 Kissena Blvd" });
+  await expect(row).toContainText("LoopMint participating center");
+  await row
+    .getByRole("button", { name: "Use for my ticket", exact: true })
+    .click();
+  await expect(page.locator(".selected-center")).toContainText("ecoATM");
+  await page.getByLabel("Dry cardboard", { exact: true }).fill("1");
+  const request = page.waitForRequest(
+    (r) => r.url().endsWith("/api/claims") && r.method() === "POST",
+  );
+  await page.getByRole("button", { name: "Create drop-off ticket" }).click();
+  expect((await request).postDataJSON().center_id).toBe("greenpoint");
+  await expect(
+    page.getByRole("dialog", { name: "Your drop-off ticket" }),
+  ).toBeVisible();
+});
+
+test("registered centers remain available when Google search fails", async ({
+  page,
+}) => {
+  await setup(
+    page,
+    [
+      {
+        id: "greenpoint",
+        name: "Registered ecoATM",
+        address: "Registered address",
+        latitude: 40.7307,
+        longitude: -73.9544,
+        is_demo: 0,
+        google_place_id: "registered-ecoatm",
+      },
+    ],
+    "failure",
+  );
+  await page
+    .getByRole("button", { name: "Use my location", exact: true })
+    .click();
+  await expect(
+    page.locator(".google-discovery").getByRole("alert"),
+  ).toContainText("unavailable");
+  await expect(
+    page
+      .locator(".google-place-list")
+      .getByRole("button", { name: "Use for my ticket" }),
+  ).toBeEnabled();
+});

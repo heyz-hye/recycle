@@ -61,6 +61,7 @@ def test_insufficient_funding_never_sends_until_reserved(client):
     result = approve(client, claim)
     assert result.json()["status"] == "verified"
     assert result.json()["reward"]["state"] == "awaiting_funding"
+    assert result.json()["reward"]["funding_reason"] == "insufficient_budget"
     tick()
     with transaction(write=False) as c:
         assert c.one("SELECT COUNT(*) AS n FROM reward_jobs")["n"] == 0

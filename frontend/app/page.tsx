@@ -68,6 +68,8 @@ import {
 import { wallets, loginWallet, signBurn } from "@/lib/wallet";
 import Modal from "@/components/Modal";
 import Share from "@/components/Share";
+import AssetWallet from "@/components/AssetWallet";
+import UsdcFundingForm from "@/components/UsdcFundingForm";
 import { canShareReward } from "@/lib/sharing";
 import Scanner from "@/components/Scanner";
 import CenterPicker from "@/components/CenterPicker";
@@ -82,11 +84,16 @@ const names: Record<Page, string> = {
   review: "Center workspace",
   funding: "Funding",
 };
-function Badge({ state }: { state: string }) {
+function Badge({ state, reason }: { state: string; reason?: string | null }) {
   const labels: Record<string, string> = {
     submitted: "Awaiting center",
     awaiting_review: "In review",
-    awaiting_funding: "Awaiting funding",
+    awaiting_funding:
+      reason === "insufficient_loop"
+        ? "Awaiting treasury LOOP"
+        : reason === "treasury_unavailable"
+          ? "Treasury unavailable"
+          : "Awaiting funding",
     verified: "Center confirmed",
     rejected: "Not accepted",
     queued: "Reward queued",
@@ -321,6 +328,9 @@ export default function Home() {
                   .map((i) => quantity(i, c.status === "verified"))
                   .join(" · ")}
               </span>
+              {c.reward?.funding_message && (
+                <small className="muted">{c.reward.funding_message}</small>
+              )}
               {c.verification?.reason && (
                 <small className="muted">{c.verification.reason}</small>
               )}
@@ -334,7 +344,10 @@ export default function Home() {
                   {tokens(c.reward.amount_base_units)} <small>LOOP</small>
                 </strong>
               )}
-              <Badge state={c.reward?.state || c.status} />
+              <Badge
+                state={c.reward?.state || c.status}
+                reason={c.reward?.funding_reason}
+              />
               {c.reward?.needs_review ? (
                 <small className="error-text">
                   Transaction needs staff review
@@ -925,50 +938,12 @@ export default function Home() {
                 title="Good things come around."
                 text="Your rewards, from center confirmation to your wallet."
               />
-              <div className="wallet-grid">
-                <div className="wallet-card">
-                  <span className="hero-kicker">AVAILABLE BALANCE</span>
-                  <div>
-                    {tokens(wallet?.balance_base_units || 0)}{" "}
-                    <small>LOOP</small>
-                  </div>
-                  <p>
-                    {tokens(wallet?.pending_base_units || 0)} LOOP awaiting
-                    funding or transaction confirmation
-                  </p>
-                  <button
-                    className="button lime"
-                    disabled={!wallet || wallet.balance_base_units < 100}
-                    onClick={() => setShowRedeem(true)}
-                  >
-                    Simulate redemption <ArrowUpRight size={17} />
-                  </button>
-                  <span className="wallet-label">
-                    {demo ? "Simulated tokens" : "Solana Devnet tokens"} · No
-                    real monetary value
-                  </span>
-                </div>
-                <div className="panel wallet-explainer">
-                  <ShieldCheck size={30} />
-                  <h2>Confirmed means received.</h2>
-                  <p>
-                    Rewards become available once the token transaction is
-                    confirmed. Center approval is the first step.
-                  </p>
-                  <p className="small">
-                    Demo conversion: 1 LOOP = $0.01 of simulated credit. No
-                    actual money is paid.
-                  </p>
-                  {!demo && (
-                    <button
-                      className="button secondary"
-                      onClick={() => setShowConnect(true)}
-                    >
-                      Reconnect wallet
-                    </button>
-                  )}
-                </div>
-              </div>
+              <AssetWallet
+                key={user.id}
+                user={user}
+                onConnect={() => setShowConnect(true)}
+                onUpdated={load}
+              />
               <section className="panel">
                 <div className="panel-heading">
                   <h2>Reward history</h2>
@@ -985,12 +960,15 @@ export default function Home() {
                       <div>
                         <strong>Recycling reward</strong>
                         <p>{date(r.created_at)}</p>
+                        {r.funding_message && (
+                          <p className="muted">{r.funding_message}</p>
+                        )}
                       </div>
-                      <Badge state={r.state} />
+                      <Badge state={r.state} reason={r.funding_reason} />
                       <strong className="green">
                         +{tokens(r.amount_base_units)} LOOP
                       </strong>
-                      {r.signature && !r.signature.startsWith("demo:") && (
+                      {r.signature && !r.signature.includes(":") && (
                         <a
                           className="icon-button"
                           href={explorer(r.signature)}
@@ -1119,74 +1097,171 @@ export default function Home() {
                 title="Fuel the next good habit."
                 text="Keep rewards funded, traceable, and ready for the people making a difference."
               />
-              <div className="stats-grid four">
-                <Stat
-                  label="Available funding"
-                  value={dollars(funding?.available_cents || 0)}
-                  icon={<CircleDollarSign size={19} />}
-                  note="Available for new reservations"
-                />
-                <Stat
-                  label="Reserved"
-                  value={dollars(funding?.reserved_cents || 0)}
-                  icon={<Clock3 size={19} />}
-                  note="Committed to pending rewards"
-                />
-                <Stat
-                  label="Rewards issued"
-                  value={dollars(funding?.issued_cents || 0)}
-                  icon={<CheckCircle2 size={19} />}
-                  note="Confirmed reward allocation"
-                />
-                <Stat
-                  label="Pending reimbursement"
-                  value={dollars(funding?.pending_reimbursement_cents || 0)}
-                  icon={<RefreshCw size={19} />}
-                  note="Excluded from available funding"
-                />
-              </div>
+              {!demo ? (
+                <div className="stats-grid four">
+                  <Stat
+                    label="Verified deposits"
+                    value={`${((funding?.usdc?.received_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`}
+                    icon={<CircleDollarSign size={19} />}
+                    note="Finalized treasury deposits"
+                  />
+                  <Stat
+                    label="Available backing"
+                    value={`${((funding?.usdc?.remaining_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`}
+                    icon={<Wallet size={19} />}
+                    note="Deposits minus redeemed value"
+                  />
+                  <Stat
+                    label="Converted value"
+                    value={dollars(
+                      (funding?.usdc?.converted_usd_micros || 0) / 10000,
+                    )}
+                    icon={<CheckCircle2 size={19} />}
+                    note="Already allocated to conversions"
+                  />
+                  <Stat
+                    label="Outstanding LOOP"
+                    value={tokens(
+                      funding?.usdc?.distributed_loop_base_units || 0,
+                    )}
+                    icon={<RefreshCw size={19} />}
+                    note="Distributed and not redeemed"
+                  />
+                </div>
+              ) : (
+                <div className="stats-grid four">
+                  <Stat
+                    label="Available funding"
+                    value={dollars(funding?.available_cents || 0)}
+                    icon={<CircleDollarSign size={19} />}
+                    note="Available for new reservations"
+                  />
+                  <Stat
+                    label="Reserved"
+                    value={dollars(funding?.reserved_cents || 0)}
+                    icon={<Clock3 size={19} />}
+                    note="Committed to pending rewards"
+                  />
+                  <Stat
+                    label="Rewards issued"
+                    value={dollars(funding?.issued_cents || 0)}
+                    icon={<CheckCircle2 size={19} />}
+                    note="Confirmed reward allocation"
+                  />
+                  <Stat
+                    label="Pending reimbursement"
+                    value={dollars(funding?.pending_reimbursement_cents || 0)}
+                    icon={<RefreshCw size={19} />}
+                    note="Excluded from available funding"
+                  />
+                </div>
+              )}
+              {demo && !!funding?.blocked_rewards?.length && (
+                <section className="panel">
+                  <h2>Rewards waiting to be credited</h2>
+                  <p className="muted">
+                    USDC funds conversions. Treasury LOOP supplies ticket
+                    rewards. Both assets must be available for the corresponding
+                    payout.
+                  </p>
+                  {funding.blocked_rewards.map((r) => (
+                    <div key={r.id}>
+                      <Badge
+                        state="awaiting_funding"
+                        reason={r.funding_reason}
+                      />
+                      <p>{r.funding_message}</p>
+                    </div>
+                  ))}
+                </section>
+              )}
               <div className="review-grid">
-                <FundingForm
-                  busy={busy}
-                  waiting={funding?.awaiting_funding || 0}
-                  onFund={(data) =>
-                    action(async () => {
-                      setFunding(await api<Funding>("/funding", data));
-                      setNotice(
-                        "Demo funding added. Eligible waiting rewards are now queued.",
-                      );
-                      await load();
-                    })
-                  }
-                />
+                {!demo ? (
+                  <UsdcFundingForm
+                    userId={user.id}
+                    details={funding?.usdc}
+                    onVerified={(updated) => {
+                      setFunding(updated);
+                      setNotice("USDC funding received.");
+                      void load();
+                    }}
+                  />
+                ) : (
+                  <FundingForm
+                    busy={busy}
+                    waiting={funding?.awaiting_funding || 0}
+                    onFund={(data) =>
+                      action(async () => {
+                        setFunding(await api<Funding>("/funding", data));
+                        setNotice(
+                          "Funding recorded. Rewards queue when both budget and treasury LOOP are available.",
+                        );
+                        await load();
+                      })
+                    }
+                  />
+                )}
                 <section className="panel">
                   <div className="panel-heading">
                     <h2>Funding activity</h2>
-                    <span className="pill">Simulated funds</span>
+                    <span className="pill">
+                      {demo ? "Simulated funds" : "Devnet USDC"}
+                    </span>
                   </div>
-                  {funding?.ledger.map((l) => (
-                    <div className="transaction-row" key={l.id}>
-                      <span className="material-icon">
-                        <CircleDollarSign size={19} />
-                      </span>
-                      <div>
-                        <strong>
-                          {(
-                            {
-                              received: "Funding received",
-                              reserved: "Reward reserved",
-                              issued: "Reward issued",
-                              simulated_payout: "Simulated payout",
-                            } as Record<string, string>
-                          )[l.kind] || l.kind}
+                  {!demo && (
+                    <>
+                      <p className="muted">
+                        Only verified USDC deposits fund LOOP. Earlier manually
+                        entered dollar amounts are excluded.
+                      </p>
+                      {funding?.usdc?.deposits.map((d) => (
+                        <div className="transaction-row" key={d.signature}>
+                          <div>
+                            <strong>
+                              {(d.amount_base_units / 1e6).toLocaleString(
+                                undefined,
+                                { maximumFractionDigits: 6 },
+                              )}{" "}
+                              USDC received
+                            </strong>
+                            <p>{date(d.created_at)}</p>
+                          </div>
+                          <a
+                            className="text-link"
+                            href={explorer(d.signature)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View deposit <ExternalLink size={16} />
+                          </a>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {demo &&
+                    funding?.ledger.map((l) => (
+                      <div className="transaction-row" key={l.id}>
+                        <span className="material-icon">
+                          <CircleDollarSign size={19} />
+                        </span>
+                        <div>
+                          <strong>
+                            {(
+                              {
+                                received: "Funding received",
+                                reserved: "Reward reserved",
+                                issued: "Reward issued",
+                                simulated_payout: "Simulated payout",
+                              } as Record<string, string>
+                            )[l.kind] || l.kind}
+                          </strong>
+                          <p>{date(l.created_at)}</p>
+                        </div>
+                        <strong className="push-right">
+                          {dollars(l.amount_cents)}
                         </strong>
-                        <p>{date(l.created_at)}</p>
                       </div>
-                      <strong className="push-right">
-                        {dollars(l.amount_cents)}
-                      </strong>
-                    </div>
-                  ))}
+                    ))}
                 </section>
               </div>
             </>
@@ -1620,7 +1695,13 @@ function Review({
           {claim.reward && (
             <>
               <strong>{tokens(claim.reward.amount_base_units)} LOOP</strong>
-              <Badge state={claim.reward.state} />
+              <Badge
+                state={claim.reward.state}
+                reason={claim.reward.funding_reason}
+              />
+              {claim.reward.funding_message && (
+                <p className="muted">{claim.reward.funding_message}</p>
+              )}
             </>
           )}
         </div>
@@ -1807,7 +1888,8 @@ function FundingForm({
         <Clock3 size={18} />
         <span>
           {waiting} confirmed {waiting === 1 ? "claim is" : "claims are"}{" "}
-          waiting for funding. Available funds are reserved automatically.
+          waiting for funding or treasury LOOP. Rewards retry automatically when
+          both are available.
         </span>
       </div>
     </form>

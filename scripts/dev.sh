@@ -28,8 +28,12 @@ export PYTHONPATH="$PWD/backend"
 export NEXT_TELEMETRY_DISABLED=1
 .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --timeout-keep-alive 65 &
 api_pid=$!
-cleanup() { kill "$api_pid" "${web_pid:-}" 2>/dev/null || true; }
+cleanup() { kill "$api_pid" "${worker_pid:-}" "${web_pid:-}" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
+if [ "$(.venv/bin/python -c 'from app.config import get_settings; print(get_settings().app_mode)')" = "devnet" ]; then
+  .venv/bin/python -m app.worker &
+  worker_pid=$!
+fi
 npm run dev --prefix frontend &
 web_pid=$!
 echo 'LoopMint: http://localhost:3000 · API docs: http://127.0.0.1:8000/docs'

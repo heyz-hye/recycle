@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends
 from ..auth import current_user, partner
 from ..db import transaction
 from ..config import get_settings
-from ..schemas import FundingInput, RedemptionInput, RedemptionConfirm
+from ..schemas import (
+    FundingInput,
+    FundingDepositInput,
+    FundingTransferInput,
+    RedemptionInput,
+    RedemptionConfirm,
+)
 from ..services.common import now, require
 from ..services.rewards import deposit
 from ..services import redemptions
@@ -75,7 +81,7 @@ def wallet(user=Depends(current_user)):
                 (user["id"],),
             )["n"],
             "rewards": c.all(
-                "SELECT * FROM rewards WHERE user_id=? ORDER BY created_at DESC",
+                "SELECT r.*, f.code AS funding_reason, f.message AS funding_message FROM rewards r LEFT JOIN reward_funding_status f ON f.reward_id=r.id WHERE r.user_id=? ORDER BY r.created_at DESC",
                 (user["id"],),
             ),
             "redemptions": c.all(
@@ -95,7 +101,46 @@ def funding(user=Depends(partner)):
         result["awaiting_funding"] = c.one(
             "SELECT COUNT(*) AS n FROM rewards WHERE state='awaiting_funding'"
         )["n"]
+        result["blocked_rewards"] = c.all(
+            "SELECT r.id, r.amount_base_units, f.code AS funding_reason, f.message AS funding_message "
+            "FROM rewards r JOIN reward_funding_status f ON f.reward_id=r.id "
+            "WHERE r.state='awaiting_funding' ORDER BY r.created_at,r.id"
+        )
+        if get_settings().app_mode == "devnet":
+            from ..services.funding import summary
+
+            result["usdc"] = summary(c)
         return result
+
+
+@router.post("/funding/prepare")
+def prepare_funding_deposit(body: FundingTransferInput, user=Depends(partner)):
+    from ..services.solana_client import chain
+
+    require(
+        get_settings().app_mode == "devnet", "Wallet funding requires Devnet mode.", 409
+    )
+    try:
+        return chain().prepare_funding_deposit(
+            body.source_wallet, body.amount_base_units
+        )
+    except ValueError as exc:
+        require(False, str(exc), 400)
+    except Exception:
+        require(
+            False,
+            "Unable to prepare the USDC deposit. Check your wallet and try again.",
+            503,
+        )
+
+
+@router.post("/funding/deposits")
+def verify_funding_deposit(body: FundingDepositInput, user=Depends(partner)):
+    from ..services.funding import record_deposit
+
+    with transaction() as c:
+        record_deposit(c, user["id"], body.signature)
+    return funding(user)
 
 
 @router.post("/funding")

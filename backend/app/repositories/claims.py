@@ -18,7 +18,7 @@ def get_claim(c, claim_id, user):
         "SELECT * FROM verifications WHERE claim_id=?", (claim_id,)
     )
     claim["reward"] = c.one(
-        "SELECT r.*, j.last_error, j.needs_review FROM rewards r LEFT JOIN reward_jobs j ON j.reward_id=r.id WHERE r.claim_id=?",
+        "SELECT r.*, j.last_error, j.needs_review, f.code AS funding_reason, f.message AS funding_message FROM rewards r LEFT JOIN reward_jobs j ON j.reward_id=r.id LEFT JOIN reward_funding_status f ON f.reward_id=r.id WHERE r.claim_id=?",
         (claim_id,),
     )
     return claim

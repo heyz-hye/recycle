@@ -29,6 +29,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("DEMO_AUTO_WORKER", "false")
     monkeypatch.setenv("DEMO_ACCOUNTS_ENABLED", "true")
     monkeypatch.setenv("TIMESCALE_ENABLED", "false")
+    monkeypatch.setenv("SOLANA_MINT", "")
+    monkeypatch.setenv("SOLANA_ISSUER_KEYPAIR", "")
     get_settings.cache_clear()
     chain.cache_clear()
     try:

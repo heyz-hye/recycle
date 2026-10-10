@@ -5,6 +5,7 @@ import {
   validCoordinates,
   directionsUrl,
 } from "../lib/location";
+import { mergeRegisteredPlaces } from "../lib/google-maps";
 import type { Center } from "../lib/api";
 import { mockGoogleMaps } from "./helpers/google-maps";
 
@@ -173,8 +174,8 @@ test("a timed-out coarse position retries once with high accuracy", async ({
           .positionOptions,
     ),
   ).toEqual([
-    { enableHighAccuracy: false, maximumAge: 60000, timeout: 10000 },
-    { enableHighAccuracy: true, maximumAge: 60000, timeout: 20000 },
+    { enableHighAccuracy: false, maximumAge: 0, timeout: 10000 },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
   ]);
 });
 
@@ -214,4 +215,109 @@ test("distance ranking handles zero, dateline, unknown positions, and safe direc
   expect(url.searchParams.get("destination")).toBe("0,0");
   expect(url.searchParams.has("origin")).toBe(false);
   expect(directionsUrl({ ...real, is_demo: 1 })).toBeNull();
+});
+
+test("imprecise success retries instead of showing incorrect nearby centers", async ({
+  page,
+}) => {
+  await mockGoogleMaps(page);
+  await page.addInitScript(() => {
+    let calls = 0;
+    navigator.geolocation.getCurrentPosition = (success) => {
+      calls++;
+      success({
+        coords:
+          calls === 1
+            ? { latitude: 40.8, longitude: -73.7, accuracy: 5000 }
+            : { latitude: 40.7305, longitude: -73.9544, accuracy: 20 },
+      } as GeolocationPosition);
+    };
+  });
+  await dropoff(page);
+  await page
+    .getByRole("button", { name: "Use my location", exact: true })
+    .click();
+  await expect(page.locator(".google-place-list li").first()).toContainText(
+    "Nearby public recycling",
+  );
+  const searches = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          googleSearches: {
+            locationBias: { center: { lat: number; lng: number } };
+          }[];
+        }
+      ).googleSearches,
+  );
+  expect(searches).toHaveLength(1);
+  expect(searches[0].locationBias.center).toEqual({
+    lat: 40.7305,
+    lng: -73.9544,
+  });
+});
+
+test("persistently inaccurate GPS leaves address search available and never searches the wrong area", async ({
+  page,
+}) => {
+  await mockGoogleMaps(page);
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = (success) =>
+      success({
+        coords: { latitude: 40.8, longitude: -73.7, accuracy: 5000 },
+      } as GeolocationPosition);
+  });
+  await dropoff(page);
+  await page
+    .getByRole("button", { name: "Use my location", exact: true })
+    .click();
+  await expect(page.locator(".location-status")).toContainText(
+    "too approximate",
+  );
+  await expect(page.locator(".google-discovery")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Create drop-off ticket" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByLabel("Or search by address, neighborhood, or postal code"),
+  ).toBeEnabled();
+});
+
+test("enrollment requires the exact branch and closed places are not reintroduced", () => {
+  const origin = { latitude: 40.72946, longitude: -73.815485 };
+  const center: Center = {
+    id: "ecoatm-kissena-blvd",
+    name: "ecoATM",
+    address: "71-04 Kissena Blvd",
+    ...origin,
+    is_demo: 0,
+    google_place_id: "kissena-place",
+  };
+  const other = {
+    id: "different-branch",
+    name: "ecoATM",
+    address: "Another street",
+    location: origin,
+    distance: 0,
+    attributions: [],
+  };
+  const results = mergeRegisteredPlaces([other], [center], origin, 10000);
+  expect(results).toHaveLength(2);
+  expect(
+    results.find((p) => p.id === "different-branch")?.registeredCenterId,
+  ).toBeUndefined();
+  expect(
+    results.find((p) => p.id === "kissena-place")?.registeredCenterId,
+  ).toBe("ecoatm-kissena-blvd");
+  expect(
+    mergeRegisteredPlaces([], [center], origin, 10000, ["kissena-place"]),
+  ).toHaveLength(0);
+  expect(
+    mergeRegisteredPlaces(
+      [{ ...other, id: "kissena-place" }],
+      [center],
+      origin,
+      10000,
+    ),
+  ).toHaveLength(1);
 });

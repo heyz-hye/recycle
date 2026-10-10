@@ -20,8 +20,9 @@ def adapter():
     return a
 
 
-def test_mint_transaction_signed_and_distinct_per_reward():
+def test_reward_transaction_transfers_treasury_stock_and_is_distinct():
     a = adapter()
+    a.check_payout = Mock()
     wallet = str(Keypair().pubkey())
     first = a.prepare({"id": "claim-one", "amount_base_units": 4000}, wallet)
     second = a.prepare({"id": "claim-two", "amount_base_units": 4000}, wallet)
@@ -29,10 +30,12 @@ def test_mint_transaction_signed_and_distinct_per_reward():
     tx = Transaction.from_bytes(base64.b64decode(first["transaction_b64"]))
     tx.verify()
     assert len(tx.message.instructions) == 3
-    assert tx.message.instructions[1].data[0] == 14  # SPL MintToChecked
+    assert (
+        tx.message.instructions[1].data[0] == 12
+    )  # SPL TransferChecked; rewards never mint
     assert int.from_bytes(tx.message.instructions[1].data[1:9], "little") == 4000
     assert tx.message.instructions[1].data[9] == 2
-    assert tx.message.instructions[2].data == b"LoopMint reward:claim-one"
+    assert tx.message.instructions[2].data == b"LoopMint withdrawal:reward:claim-one"
 
 
 def signed_burn(a, owner, redemption="redemption-one"):
@@ -118,3 +121,138 @@ def test_other_network_is_rejected_before_reading_keypair(monkeypatch):
     monkeypatch.setattr("app.services.solana_client.Client", lambda *a, **k: fake)
     with pytest.raises(RuntimeError, match="Only Solana Devnet"):
         SolanaChain()
+
+
+@pytest.mark.parametrize(
+    "asset,amount", [("LOOP", 1234), ("USDC", 1234567), ("SOL", 123456789)]
+)
+def test_signed_withdrawal_uses_exact_asset_amount_and_destination(asset, amount):
+    from spl.token.instructions import get_associated_token_address
+
+    a = adapter()
+    owner = Keypair().pubkey()
+    a.check_payout = Mock()
+    mint = Keypair().pubkey()
+    a.usdc_mint = lambda: mint
+    row = {
+        "id": "withdrawal-one",
+        "asset": asset,
+        "amount_base_units": amount,
+        "destination": str(owner),
+    }
+    result = a.prepare_withdrawal(row)
+    tx = Transaction.from_bytes(base64.b64decode(result["transaction_b64"]))
+    tx.verify()
+    keys = tx.message.account_keys
+    if asset == "SOL":
+        ix = tx.message.instructions[0]
+        assert int.from_bytes(ix.data[:4], "little") == 2
+        assert int.from_bytes(ix.data[4:12], "little") == amount
+        assert keys[ix.accounts[1]] == owner
+    else:
+        ix = tx.message.instructions[1]
+        assert ix.data[0] == 12  # TransferChecked, never MintTo
+        assert int.from_bytes(ix.data[1:9], "little") == amount
+        assert ix.data[9] == (2 if asset == "LOOP" else 6)
+        assert (
+            get_associated_token_address(owner, a.mint if asset == "LOOP" else mint)
+            in keys
+        )
+    assert b"withdrawal" in tx.message.instructions[-1].data
+    assert (
+        result["signature"]
+        != a.prepare_withdrawal({**row, "id": "withdrawal-two"})["signature"]
+    )
+
+
+def test_existing_nine_decimal_loop_is_transferred_from_treasury():
+    from spl.token.instructions import get_associated_token_address
+
+    a = adapter()
+    a.loop_decimals = 9
+    a.check_payout = Mock()
+    owner = Keypair().pubkey()
+    row = dict(
+        id="existing-loop", asset="LOOP", amount_base_units=125, destination=str(owner)
+    )
+    tx = Transaction.from_bytes(
+        base64.b64decode(a.prepare_withdrawal(row)["transaction_b64"])
+    )
+    tx.verify()
+    ix = tx.message.instructions[1]
+    keys = tx.message.account_keys
+    assert ix.data[0] == 12  # TransferChecked: no mint authority needed.
+    assert int.from_bytes(ix.data[1:9], "little") == 1250000000
+    assert ix.data[9] == 9
+    assert keys[ix.accounts[0]] == get_associated_token_address(
+        a.issuer.pubkey(), a.mint
+    )
+    assert keys[ix.accounts[1]] == a.mint
+    assert keys[ix.accounts[2]] == get_associated_token_address(owner, a.mint)
+    a.rpc.get_token_account_balance.return_value = SimpleNamespace(
+        value=SimpleNamespace(amount="100000000000")
+    )
+    assert a.asset_balance("LOOP") == 10000  # 100 LOOP in app accounting units.
+
+
+@pytest.mark.parametrize("asset", ["LOOP", "USDC"])
+def test_missing_treasury_token_account_is_zero_not_rpc_failure(asset):
+    a = adapter()
+    a.loop_decimals = 9
+    a.usdc_mint = lambda: Keypair().pubkey()
+    a.rpc.get_account_info.return_value = SimpleNamespace(value=None)
+    assert a.asset_balance(asset) == 0
+    a.rpc.get_token_account_balance.assert_not_called()
+
+
+@pytest.mark.parametrize("asset", ["LOOP", "USDC"])
+def test_treasury_token_account_rpc_failure_is_not_zero_balance(asset):
+    a = adapter()
+    a.loop_decimals = 9
+    a.usdc_mint = lambda: Keypair().pubkey()
+    a.rpc.get_account_info.side_effect = RuntimeError("RPC unavailable")
+    with pytest.raises(RuntimeError, match="RPC unavailable"):
+        a.asset_balance(asset)
+    a.rpc.get_token_account_balance.assert_not_called()
+
+
+def test_existing_usdc_account_reads_exact_base_units():
+    a = adapter()
+    a.usdc_mint = lambda: Keypair().pubkey()
+    a.rpc.get_account_info.return_value = SimpleNamespace(value=object())
+    a.rpc.get_token_account_balance.return_value = SimpleNamespace(
+        value=SimpleNamespace(amount="20000000")
+    )
+    assert a.asset_balance("USDC") == 20000000
+
+
+@pytest.mark.parametrize("amount", [10123456, 10000000000])
+def test_government_funding_transaction_requires_sender_signature_and_exact_usdc(
+    amount,
+):
+    from spl.token.instructions import get_associated_token_address
+
+    a = adapter()
+    source = Keypair().pubkey()
+    mint = Keypair().pubkey()
+    a.usdc_mint = lambda: mint
+    a.token_account_balance = Mock(return_value=10000000000)
+    result = a.prepare_funding_deposit(str(source), amount)
+    tx = Transaction.from_bytes(base64.b64decode(result["transaction_b64"]))
+    assert tx.message.header.num_required_signatures == 1
+    assert tx.message.account_keys[0] == source
+    assert all(bytes(s) == bytes(64) for s in tx.signatures)
+    ix = tx.message.instructions[1]
+    assert ix.data[0] == 12
+    assert int.from_bytes(ix.data[1:9], "little") == amount
+    assert ix.data[9] == 6
+    keys = tx.message.account_keys
+    assert keys[ix.accounts[0]] == get_associated_token_address(source, mint)
+    assert keys[ix.accounts[2]] == get_associated_token_address(a.issuer.pubkey(), mint)
+    assert keys[ix.accounts[3]] == source
+    a.rpc.send_raw_transaction.assert_not_called()
+    a.token_account_balance.return_value = 0
+    with pytest.raises(ValueError, match="enough Devnet USDC"):
+        a.prepare_funding_deposit(str(source), amount)
+    with pytest.raises(ValueError, match="not the platform treasury"):
+        a.prepare_funding_deposit(str(a.issuer.pubkey()), 100)

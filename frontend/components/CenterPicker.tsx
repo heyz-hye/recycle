@@ -79,6 +79,10 @@ export default function CenterPicker({
     }
     cancelRequest();
     const id = request.current;
+    setPosition(null);
+    setPositionLabel(null);
+    setAccuracy(null);
+    onChange("");
     setLocating(true);
     onLocatingChange(true);
     setMessage(
@@ -103,24 +107,43 @@ export default function CenterPicker({
         navigator.geolocation.getCurrentPosition(
           (result) => {
             if (id !== request.current) return;
-            request.current++;
-            finish();
             const next = {
               latitude: result.coords.latitude,
               longitude: result.coords.longitude,
             };
             if (!validCoordinates(next)) {
+              request.current++;
+              finish();
               setMessage(
                 "Your device returned an unavailable location. Search an address below.",
               );
               return;
             }
-            applyPosition(
-              next,
-              Number.isFinite(result.coords.accuracy)
-                ? result.coords.accuracy
-                : null,
-            );
+            const precision = result.coords.accuracy;
+            // A successful callback can still be an imprecise Wi-Fi/IP fix.
+            // Never present that as a reliable nearest-center ranking.
+            if (
+              !Number.isFinite(precision) ||
+              precision < 0 ||
+              precision > 250
+            ) {
+              if (!highAccuracy) {
+                setMessage(
+                  "Your browser returned an approximate location. Trying a more accurate location before finding nearby centers…",
+                );
+                attempt(true);
+                return;
+              }
+              request.current++;
+              finish();
+              setMessage(
+                "Your browser's location is too approximate to reliably find the nearest center. Search your address below, or try location again outdoors.",
+              );
+              return;
+            }
+            request.current++;
+            finish();
+            applyPosition(next, precision);
           },
           (error) => {
             if (id !== request.current) return;
@@ -143,7 +166,7 @@ export default function CenterPicker({
           },
           {
             enableHighAccuracy: highAccuracy,
-            maximumAge: 60000,
+            maximumAge: 0,
             timeout: highAccuracy ? 20000 : 10000,
           },
         );

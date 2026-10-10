@@ -94,3 +94,44 @@ CREATE INDEX IF NOT EXISTS claims_owner ON claims(user_id, created_at);
 CREATE INDEX IF NOT EXISTS claims_center ON claims(center_id, status);
 CREATE INDEX IF NOT EXISTS reward_state ON rewards(state, created_at);
 CREATE INDEX IF NOT EXISTS events_time ON recycling_events(created_at);
+CREATE TABLE IF NOT EXISTS reward_custody (
+ reward_id TEXT PRIMARY KEY REFERENCES rewards(id),
+ delivery TEXT NOT NULL CHECK(delivery IN ('internal','external'))
+);
+CREATE TABLE IF NOT EXISTS conversion_quotes (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+ loop_base_units BIGINT NOT NULL, asset TEXT NOT NULL CHECK(asset IN ('USDC','SOL')),
+ output_base_units BIGINT NOT NULL, usd_micros BIGINT NOT NULL,
+ fund_usd_micros BIGINT NOT NULL, supply_base_units BIGINT NOT NULL,
+ sol_usd_micros BIGINT NOT NULL, expires_at BIGINT NOT NULL, created_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS conversions (
+ id TEXT PRIMARY KEY, quote_id TEXT UNIQUE NOT NULL REFERENCES conversion_quotes(id),
+ user_id TEXT NOT NULL REFERENCES users(id), request_key TEXT UNIQUE NOT NULL,
+ loop_base_units BIGINT NOT NULL CHECK(loop_base_units>0),
+ asset TEXT NOT NULL CHECK(asset IN ('USDC','SOL')),
+ output_base_units BIGINT NOT NULL CHECK(output_base_units>0),
+ usd_micros BIGINT NOT NULL CHECK(usd_micros>0), created_at BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS withdrawals (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+ asset TEXT NOT NULL CHECK(asset IN ('LOOP','USDC','SOL')),
+ amount_base_units BIGINT NOT NULL CHECK(amount_base_units>0), destination TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('queued','sent','confirmed','review')),
+ request_key TEXT UNIQUE NOT NULL, transaction_b64 TEXT, signature TEXT UNIQUE,
+ last_valid_block_height BIGINT, attempts BIGINT NOT NULL DEFAULT 0,
+ last_error TEXT, created_at BIGINT NOT NULL, confirmed_at BIGINT
+);
+CREATE INDEX IF NOT EXISTS conversions_owner ON conversions(user_id,created_at);
+CREATE INDEX IF NOT EXISTS withdrawals_owner ON withdrawals(user_id,created_at);
+
+CREATE TABLE IF NOT EXISTS reward_funding_status (
+ reward_id TEXT PRIMARY KEY REFERENCES rewards(id),
+ code TEXT NOT NULL, message TEXT NOT NULL, checked_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS funding_deposits (
+ signature TEXT PRIMARY KEY, amount_base_units BIGINT NOT NULL CHECK(amount_base_units>0),
+ treasury TEXT NOT NULL, mint TEXT NOT NULL, slot BIGINT NOT NULL,
+ actor_id TEXT REFERENCES users(id), created_at BIGINT NOT NULL
+);
