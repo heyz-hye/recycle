@@ -86,6 +86,11 @@ class TicketInput(StrictModel):
     ticket: str = Field(min_length=10, max_length=150)
 
 
+class FundingTransferInput(StrictModel):
+    source_wallet: str = Field(min_length=32, max_length=44)
+    amount_base_units: int = Field(gt=0, le=1000000000000, strict=True)
+
+
 class FundingDepositInput(StrictModel):
     signature: str = Field(
         min_length=64, max_length=88, pattern=r"^[1-9A-HJ-NP-Za-km-z]+$"

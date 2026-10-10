@@ -128,6 +128,46 @@ class SolanaChain:
             return 0
         return int(self.rpc.get_token_account_balance(account).value.amount)
 
+    def prepare_funding_deposit(self, source_wallet, amount):
+        source = Pubkey.from_string(source_wallet)
+        if not source.is_on_curve() or source == self.issuer.pubkey():
+            raise ValueError(
+                "Choose the government funding wallet, not the platform treasury."
+            )
+        if not 0 < amount <= 1000000000000:
+            raise ValueError("Enter a USDC amount between 0.000001 and 1,000,000.")
+        mint = self.usdc_mint()
+        source_account = get_associated_token_address(source, mint)
+        if self.token_account_balance(source_account) < amount:
+            raise ValueError(
+                "The selected funding wallet does not have enough Devnet USDC."
+            )
+        instructions = [
+            create_idempotent_associated_token_account(
+                source, self.issuer.pubkey(), mint
+            ),
+            transfer_checked(
+                TransferCheckedParams(
+                    program_id=TOKEN_PROGRAM_ID,
+                    source=source_account,
+                    mint=mint,
+                    dest=get_associated_token_address(self.issuer.pubkey(), mint),
+                    owner=source,
+                    amount=amount,
+                    decimals=6,
+                )
+            ),
+        ]
+        block = self.rpc.get_latest_blockhash().value
+        tx = Transaction.new_unsigned(
+            Message.new_with_blockhash(instructions, source, block.blockhash)
+        )
+        return {
+            "transaction_b64": base64.b64encode(bytes(tx)).decode(),
+            "treasury_address": str(self.issuer.pubkey()),
+            "amount_base_units": amount,
+        }
+
     def verify_usdc_deposit(self, signature):
         try:
             sig = Signature.from_string(signature)

@@ -224,3 +224,32 @@ def test_existing_usdc_account_reads_exact_base_units():
         value=SimpleNamespace(amount="20000000")
     )
     assert a.asset_balance("USDC") == 20000000
+
+
+def test_government_funding_transaction_requires_sender_signature_and_exact_usdc():
+    from spl.token.instructions import get_associated_token_address
+
+    a = adapter()
+    source = Keypair().pubkey()
+    mint = Keypair().pubkey()
+    a.usdc_mint = lambda: mint
+    a.token_account_balance = Mock(return_value=20000000)
+    result = a.prepare_funding_deposit(str(source), 10123456)
+    tx = Transaction.from_bytes(base64.b64decode(result["transaction_b64"]))
+    assert tx.message.header.num_required_signatures == 1
+    assert tx.message.account_keys[0] == source
+    assert all(bytes(s) == bytes(64) for s in tx.signatures)
+    ix = tx.message.instructions[1]
+    assert ix.data[0] == 12
+    assert int.from_bytes(ix.data[1:9], "little") == 10123456
+    assert ix.data[9] == 6
+    keys = tx.message.account_keys
+    assert keys[ix.accounts[0]] == get_associated_token_address(source, mint)
+    assert keys[ix.accounts[2]] == get_associated_token_address(a.issuer.pubkey(), mint)
+    assert keys[ix.accounts[3]] == source
+    a.rpc.send_raw_transaction.assert_not_called()
+    a.token_account_balance.return_value = 0
+    with pytest.raises(ValueError, match="enough Devnet USDC"):
+        a.prepare_funding_deposit(str(source), 10123456)
+    with pytest.raises(ValueError, match="not the platform treasury"):
+        a.prepare_funding_deposit(str(a.issuer.pubkey()), 100)

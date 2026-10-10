@@ -5,6 +5,7 @@ from ..config import get_settings
 from ..schemas import (
     FundingInput,
     FundingDepositInput,
+    FundingTransferInput,
     RedemptionInput,
     RedemptionConfirm,
 )
@@ -110,6 +111,27 @@ def funding(user=Depends(partner)):
 
             result["usdc"] = summary(c)
         return result
+
+
+@router.post("/funding/prepare")
+def prepare_funding_deposit(body: FundingTransferInput, user=Depends(partner)):
+    from ..services.solana_client import chain
+
+    require(
+        get_settings().app_mode == "devnet", "Wallet funding requires Devnet mode.", 409
+    )
+    try:
+        return chain().prepare_funding_deposit(
+            body.source_wallet, body.amount_base_units
+        )
+    except ValueError as exc:
+        require(False, str(exc), 400)
+    except Exception:
+        require(
+            False,
+            "Unable to prepare the USDC deposit. Check your wallet and try again.",
+            503,
+        )
 
 
 @router.post("/funding/deposits")

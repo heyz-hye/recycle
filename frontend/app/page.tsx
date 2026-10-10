@@ -69,6 +69,7 @@ import { wallets, loginWallet, signBurn } from "@/lib/wallet";
 import Modal from "@/components/Modal";
 import Share from "@/components/Share";
 import AssetWallet from "@/components/AssetWallet";
+import UsdcFundingForm from "@/components/UsdcFundingForm";
 import { canShareReward } from "@/lib/sharing";
 import Scanner from "@/components/Scanner";
 import CenterPicker from "@/components/CenterPicker";
@@ -1155,7 +1156,7 @@ export default function Home() {
                   />
                 </div>
               )}
-              {!!funding?.blocked_rewards?.length && (
+              {demo && !!funding?.blocked_rewards?.length && (
                 <section className="panel">
                   <h2>Rewards waiting to be credited</h2>
                   <p className="muted">
@@ -1177,21 +1178,13 @@ export default function Home() {
               <div className="review-grid">
                 {!demo ? (
                   <UsdcFundingForm
-                    busy={busy}
+                    userId={user.id}
                     details={funding?.usdc}
-                    onVerify={(signature) =>
-                      action(async () => {
-                        setFunding(
-                          await api<Funding>("/funding/deposits", {
-                            signature,
-                          }),
-                        );
-                        setNotice(
-                          "USDC deposit verified. Each transaction is counted only once.",
-                        );
-                        await load();
-                      })
-                    }
+                    onVerified={(updated) => {
+                      setFunding(updated);
+                      setNotice("USDC funding received.");
+                      void load();
+                    }}
                   />
                 ) : (
                   <FundingForm
@@ -1842,77 +1835,6 @@ function Review({
     </Modal>
   );
 }
-function UsdcFundingForm({
-  busy,
-  details,
-  onVerify,
-}: {
-  busy: boolean;
-  details: Funding["usdc"];
-  onVerify: (signature: string) => Promise<boolean>;
-}) {
-  const [signature, setSignature] = useState("");
-  return (
-    <form
-      className="panel form-panel"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (await onVerify(signature.trim())) setSignature("");
-      }}
-    >
-      <h2>Deposit USDC funding</h2>
-      <p className="muted">
-        Send USDC from your government funding wallet to this treasury, then
-        verify the transaction below. This environment uses Solana Devnet test
-        USDC.
-      </p>
-      <label>Treasury wallet</label>
-      <p style={{ overflowWrap: "anywhere" }}>
-        {details?.treasury_address || "Treasury unavailable. Try refreshing."}
-      </p>
-      {details?.treasury_address && (
-        <button
-          type="button"
-          className="button secondary"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(details.treasury_address!);
-            } catch {
-              /* The address remains selectable. */
-            }
-          }}
-        >
-          Copy treasury address
-        </button>
-      )}
-      <label>USDC mint · Solana Devnet</label>
-      <p className="muted" style={{ overflowWrap: "anywhere" }}>
-        {details?.usdc_mint}
-      </p>
-      <label htmlFor="deposit-signature">Deposit transaction signature</label>
-      <input
-        id="deposit-signature"
-        required
-        minLength={64}
-        maxLength={88}
-        value={signature}
-        onChange={(e) => setSignature(e.target.value)}
-        placeholder="Paste the signature from your wallet"
-      />
-      <button
-        className="button primary full"
-        disabled={busy || !details?.treasury_address}
-      >
-        {busy ? "Verifying deposit…" : "Verify USDC deposit"}
-      </button>
-      <p className="muted">
-        The amount comes from the finalized transaction. One USDC provides $1 of
-        funding for LOOP valuation. The same deposit cannot be counted twice.
-      </p>
-    </form>
-  );
-}
-
 function FundingForm({
   busy,
   waiting,

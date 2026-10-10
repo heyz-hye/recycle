@@ -230,3 +230,43 @@ def test_verified_pool_deducts_conversion_once_and_invalidates_old_quotes(
         )
         assert assets.remaining_fund(c) == 30000000
         assert assets.fund_snapshot(c)["supply_base_units"] == 3000
+
+
+def test_prepare_deposit_requires_government_role_and_does_not_credit(
+    client, monkeypatch
+):
+    from app.main import app
+    from app.auth import current_user
+
+    body = {"source_wallet": str(Keypair().pubkey()), "amount_base_units": 20000000}
+    login(client)
+    assert client.post("/api/funding/prepare", json=body).status_code == 403
+    login(client, "verifier")
+    assert client.post("/api/funding/prepare", json=body).status_code == 403
+    login(client, "partner")
+    assert client.post("/api/funding/prepare", json=body).status_code == 409
+    a = Mock()
+    a.prepare_funding_deposit.return_value = {"transaction_b64": "unsigned"}
+    monkeypatch.setattr("app.services.solana_client.chain", lambda: a)
+    monkeypatch.setattr(get_settings(), "app_mode", "devnet")
+    app.dependency_overrides[current_user] = lambda: {
+        "id": "partner",
+        "role": "funding_partner",
+    }
+    try:
+        assert client.post("/api/funding/prepare", json=body).status_code == 200
+        a.prepare_funding_deposit.assert_called_once_with(
+            body["source_wallet"], 20000000
+        )
+        for amount in [0, -1, 0.1, True, 1000000000001]:
+            assert (
+                client.post(
+                    "/api/funding/prepare", json={**body, "amount_base_units": amount}
+                ).status_code
+                == 422
+            )
+        with transaction(write=False) as c:
+            assert assets.remaining_fund(c) == 0
+            assert c.one("SELECT COUNT(*) AS n FROM funding_deposits")["n"] == 0
+    finally:
+        app.dependency_overrides.pop(current_user, None)
