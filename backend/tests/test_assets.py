@@ -469,3 +469,26 @@ def test_treasury_unavailable_is_distinct_from_insufficient_funding(
         fund_waiting(c)
         assert c.one("SELECT COUNT(*) AS n FROM reward_jobs")["n"] == 1
         assert c.one("SELECT COUNT(*) AS n FROM reward_funding_status")["n"] == 0
+
+
+def test_conversion_reports_asset_shortfall_and_recovers_after_top_up(
+    client, monkeypatch
+):
+    earned(client)
+    monkeypatch.setattr(assets, "treasury_available", lambda c, asset: 0)
+    body = {"asset": "USDC", "loop_base_units": 1000}
+    result = client.post("/api/assets/quotes", json=body)
+    assert result.status_code == 409
+    assert "needs 125 USDC" in result.json()["detail"]
+    assert "only 0 USDC is available" in result.json()["detail"]
+    with transaction(write=False) as c:
+        assert c.one("SELECT COUNT(*) AS n FROM conversion_quotes")["n"] == 0
+        assert c.one("SELECT COUNT(*) AS n FROM conversions")["n"] == 0
+    monkeypatch.setattr(assets, "treasury_available", lambda c, asset: 125000000)
+    result = client.post("/api/assets/quotes", json=body)
+    assert result.status_code == 200
+    assert result.json()["output_base_units"] == 125000000
+    assert (
+        client.get("/api/assets").json()["balances"]["LOOP"]["available_base_units"]
+        == 4000
+    )

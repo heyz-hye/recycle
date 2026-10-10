@@ -196,9 +196,15 @@ def quote(c, user, body):
     output = usd if body.asset == "USDC" else usd * 1000000000 // price
     require(usd > 0 and output > 0, "Amount is too small to convert.")
     require(output <= 9000000000000000, "Amount is too large to convert.")
+    available = treasury_available(c, body.asset)
+    decimals = 6 if body.asset == "USDC" else 9
+    scale = Decimal(10) ** decimals
     require(
-        treasury_available(c, body.asset) >= output,
-        "The treasury needs more of this asset before conversion is available.",
+        available >= output,
+        f"The Devnet treasury needs {Decimal(output) / scale:f} {body.asset} for this conversion, "
+        f"but only {Decimal(available) / scale:f} {body.asset} is available. "
+        f"Fund the treasury with Devnet {body.asset}, then try again. "
+        "Recording USD funding does not add tokens to the treasury.",
         409,
     )
     row = dict(

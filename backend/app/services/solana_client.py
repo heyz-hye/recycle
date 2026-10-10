@@ -112,14 +112,21 @@ class SolanaChain:
             )
         if asset == "LOOP":
             account = get_associated_token_address(self.issuer.pubkey(), self.mint)
-            units = int(self.rpc.get_token_account_balance(account).value.amount)
+            units = self.token_account_balance(account)
             return units // 10 ** (self.loop_decimals - 2)
         if asset == "USDC":
             account = get_associated_token_address(
                 self.issuer.pubkey(), self.usdc_mint()
             )
-            return int(self.rpc.get_token_account_balance(account).value.amount)
+            return self.token_account_balance(account)
         raise ValueError("Unsupported treasury asset.")
+
+    def token_account_balance(self, account):
+        # A treasury that has never received this token has no associated account.
+        # Treat only a confirmed absent account as zero; RPC failures must propagate.
+        if self.rpc.get_account_info(account).value is None:
+            return 0
+        return int(self.rpc.get_token_account_balance(account).value.amount)
 
     def check_payout(self, asset, amount):
         reserve = get_settings().treasury_fee_reserve_lamports

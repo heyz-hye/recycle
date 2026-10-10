@@ -193,3 +193,34 @@ def test_existing_nine_decimal_loop_is_transferred_from_treasury():
         value=SimpleNamespace(amount="100000000000")
     )
     assert a.asset_balance("LOOP") == 10000  # 100 LOOP in app accounting units.
+
+
+@pytest.mark.parametrize("asset", ["LOOP", "USDC"])
+def test_missing_treasury_token_account_is_zero_not_rpc_failure(asset):
+    a = adapter()
+    a.loop_decimals = 9
+    a.usdc_mint = lambda: Keypair().pubkey()
+    a.rpc.get_account_info.return_value = SimpleNamespace(value=None)
+    assert a.asset_balance(asset) == 0
+    a.rpc.get_token_account_balance.assert_not_called()
+
+
+@pytest.mark.parametrize("asset", ["LOOP", "USDC"])
+def test_treasury_token_account_rpc_failure_is_not_zero_balance(asset):
+    a = adapter()
+    a.loop_decimals = 9
+    a.usdc_mint = lambda: Keypair().pubkey()
+    a.rpc.get_account_info.side_effect = RuntimeError("RPC unavailable")
+    with pytest.raises(RuntimeError, match="RPC unavailable"):
+        a.asset_balance(asset)
+    a.rpc.get_token_account_balance.assert_not_called()
+
+
+def test_existing_usdc_account_reads_exact_base_units():
+    a = adapter()
+    a.usdc_mint = lambda: Keypair().pubkey()
+    a.rpc.get_account_info.return_value = SimpleNamespace(value=object())
+    a.rpc.get_token_account_balance.return_value = SimpleNamespace(
+        value=SimpleNamespace(amount="20000000")
+    )
+    assert a.asset_balance("USDC") == 20000000
