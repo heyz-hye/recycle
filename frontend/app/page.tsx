@@ -1126,7 +1126,7 @@ export default function Home() {
                       funding?.usdc?.distributed_loop_base_units || 0,
                     )}
                     icon={<RefreshCw size={19} />}
-                    note="Distributed and not redeemed"
+                    note="Staff-confirmed earnings minus redemptions"
                   />
                 </div>
               ) : (

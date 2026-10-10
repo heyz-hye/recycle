@@ -212,7 +212,8 @@ export default function AssetWallet({
           </p>
         )}
         <p className="small muted">
-          LOOP value = remaining fund ÷ distributed, unredeemed LOOP.{" "}
+          LOOP value = remaining fund ÷ earned, unredeemed LOOP. Staff-confirmed
+          rewards count even while awaiting credit.{" "}
           {data &&
             `Fund: $${amountText(data.valuation.fund_usd_micros, "USDC")} · Outstanding: ${tokens(data.valuation.supply_base_units)} LOOP.`}{" "}
           Unallocated treasury LOOP is excluded. Withdrawn LOOP still counts
@@ -432,8 +433,9 @@ function AssetAction({
             </strong>
             <p>
               Fund: ${amountText(quote.fund_usd_micros, "USDC")} ÷{" "}
-              {tokens(quote.supply_base_units)} distributed, unredeemed LOOP.
-              Treasury inventory is excluded.
+              {tokens(quote.supply_base_units)} earned, unredeemed LOOP.
+              Staff-confirmed rewards count immediately, including rewards
+              awaiting credit. Treasury inventory is excluded.
             </p>
             <p>
               {tokens(quote.loop_base_units)} LOOP will be deducted. The

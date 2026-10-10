@@ -45,10 +45,12 @@ def remaining_fund(c):
 
 
 def fund_snapshot(c):
-    # Distributed through confirmed ticket rewards, including legacy external
-    # rewards. Wallet withdrawals remain outstanding; treasury inventory does not.
-    issued = total(
-        c, "SELECT SUM(amount_base_units) AS n FROM rewards WHERE state='confirmed'"
+    # Staff confirmation earns the reward, including amounts awaiting inventory
+    # or settlement. Those obligations must affect price before they are spendable.
+    # Wallet withdrawals remain outstanding; unallocated treasury stock is excluded.
+    earned = total(
+        c,
+        "SELECT SUM(r.amount_base_units) AS n FROM rewards r JOIN claims c ON c.id=r.claim_id WHERE c.status='verified'",
     )
     converted = total(c, "SELECT SUM(loop_base_units) AS n FROM conversions")
     burned = total(
@@ -56,7 +58,7 @@ def fund_snapshot(c):
     )
     return {
         "fund_usd_micros": remaining_fund(c),
-        "supply_base_units": max(0, issued - converted - burned),
+        "supply_base_units": max(0, earned - converted - burned),
     }
 
 
@@ -143,7 +145,7 @@ def overview(c, user_id):
         "mock_usdc": cfg.mock_usdc_enabled,
         "usdc_mint": cfg.solana_usdc_mint,
         "network": "simulated" if cfg.app_mode == "demo" else "solana:devnet",
-        "supply_basis": "distributed",
+        "supply_basis": "earned_unredeemed",
         "withdrawals_configured": cfg.app_mode == "demo"
         or bool(cfg.solana_issuer_keypair and cfg.solana_mint),
     }

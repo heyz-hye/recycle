@@ -6,9 +6,9 @@ Recyclers link a Solana wallet in My account by signing an ownership challenge. 
 
 ## Exchange value
 
-**1 LOOP = remaining verified USDC funding / distributed, unredeemed LOOP.**
+**1 LOOP = remaining verified USDC funding / earned, unredeemed LOOP.**
 
-Distributed supply is all confirmed ticket rewards recorded by this application, minus completed conversions and completed legacy redemptions. It includes LOOP withdrawn to external wallets. Unallocated tokens in the main wallet and operational treasury are excluded. Tokens already allocated to users count even while physically held by the operational treasury. Unrelated token transfers outside the application's reward ledger do not create redeemable balances.
+Earned supply is the reward total of every staff-confirmed ticket, including rewards awaiting funding, queued, sent, or credited, minus completed conversions and completed legacy redemptions. Staff confirmation changes the denominator immediately; later crediting does not add the same reward again. Awaiting rewards count toward pricing but cannot be spent until credited. It includes LOOP withdrawn to external wallets. Unallocated tokens in the main wallet and operational treasury are excluded. Tokens already allocated to users count even while physically held by the operational treasury. Unrelated token transfers outside the application's reward ledger do not create redeemable balances.
 
 For example, 500 USDC of verified funding and 40 distributed LOOP produce $12.50 per LOOP, regardless of how much unallocated LOOP the treasury holds. Converting 10 LOOP reserves 125 USDC, leaving a $375 fund and 30 unredeemed LOOP. Withdrawing LOOP alone does not change the fund or distributed supply. New rewards increase distributed supply; new funding increases the numerator. With no distributed supply, conversion is unavailable.
 
