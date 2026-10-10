@@ -2528,24 +2528,72 @@ input[type="checkbox"] {
 .assistant-message.pending {
   color: var(--muted);
 }
-.assistant-error {
-  padding: 0 16px 10px;
+.assistant-heading-actions {
+  display: flex;
+  gap: 2px;
 }
-.assistant-input {
+.assistant-log {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.assistant-log:empty {
+  display: none;
+}
+.assistant-error {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff3e5;
+  font-size: 12px;
+  color: var(--ink);
+}
+.assistant-error > div {
   display: flex;
   gap: 8px;
-  padding: 12px;
+  margin-top: 8px;
+}
+.assistant-input {
+  padding: 10px 12px 8px;
   border-top: 1px solid var(--line);
 }
-.assistant-input input {
+.assistant-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.assistant-input textarea {
   flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  max-height: 120px;
   padding: 10px 12px;
+  resize: none;
+  line-height: 1.4;
 }
 .assistant-input .icon-button {
   background: var(--forest);
   color: #fff;
   border-radius: 10px;
   width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+}
+.assistant-privacy {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted);
+}
+@media (max-width: 560px) {
+  .assistant-fab {
+    right: 16px;
+    bottom: 16px;
+  }
+  .assistant-panel {
+    right: 16px;
+    bottom: 80px;
+    max-height: calc(100dvh - 96px);
+  }
 }
 .google-discovery {
   margin: 22px 0;
