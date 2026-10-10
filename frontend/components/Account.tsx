@@ -40,7 +40,7 @@ export function AccountLogin({ onLogin }: { onLogin: (user: User) => void }) {
       <p className="small muted">
         {register
           ? "Track your drop-offs and rewards with your own login."
-          : "For recyclers, recycling center staff, and funding members."}
+          : "For recyclers, recycling center staff, and fund managers."}
       </p>
       <form onSubmit={submit}>
         <fieldset disabled={busy}>
@@ -168,7 +168,9 @@ export function AccountDetails({
             {
               recycler: "Recycler",
               verifier: "Center staff",
-              funding_partner: "Funding member",
+              funding_partner: user.government_agency
+                ? "Government fund manager"
+                : "Funding member",
             }[user.role]
           }
         </dd>
@@ -185,8 +187,18 @@ export function AccountDetails({
         )}
         {user.role === "funding_partner" && (
           <>
-            <dt>Organization</dt>
+            <dt>
+              {user.government_agency ? "Government agency" : "Organization"}
+            </dt>
             <dd>{user.organization || "Not assigned"}</dd>
+            {user.government_agency && (
+              <>
+                <dt>Department</dt>
+                <dd>{user.government_department}</dd>
+                <dt>Job title</dt>
+                <dd>{user.job_title}</dd>
+              </>
+            )}
           </>
         )}
         <dt>Wallet</dt>

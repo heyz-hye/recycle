@@ -3,9 +3,10 @@
 import hashlib
 import secrets
 from threading import BoundedSemaphore
+
 from ..db import transaction
 from ..schemas import Registration
-from .common import now, uid, require
+from .common import now, require, uid
 
 _hash_slots = BoundedSemaphore(2)
 
@@ -40,11 +41,14 @@ def verify_password(password, encoded):
 def account(c, user_id):
     return c.one(
         "SELECT u.*, a.email, c.name AS job_location, c.address AS job_address, "
-        "s.job_title, f.organization FROM users u "
+        "COALESCE(s.job_title,g.job_title) AS job_title, f.organization, "
+        "g.department AS government_department, "
+        "CASE WHEN g.user_id IS NOT NULL THEN f.organization END AS government_agency FROM users u "
         "LEFT JOIN account_credentials a ON a.user_id=u.id "
         "LEFT JOIN centers c ON c.id=u.center_id "
         "LEFT JOIN staff_profiles s ON s.user_id=u.id "
-        "LEFT JOIN funding_member_profiles f ON f.user_id=u.id WHERE u.id=?",
+        "LEFT JOIN funding_member_profiles f ON f.user_id=u.id "
+        "LEFT JOIN government_funding_profiles g ON g.user_id=u.id WHERE u.id=?",
         (user_id,),
     )
 
@@ -57,6 +61,7 @@ def create_account(
     center_id=None,
     job_title="Center staff",
     organization="",
+    government_department=None,
 ):
     require(role in ("recycler", "verifier", "funding_partner"), "Unknown role.")
     require(
@@ -82,6 +87,19 @@ def create_account(
             bool(organization.strip()) and len(organization) <= 150,
             "Enter a funding organization (up to 150 characters).",
         )
+    if government_department is not None:
+        require(
+            role == "funding_partner",
+            "Government profiles require a fund manager account.",
+        )
+        require(
+            bool(government_department.strip()) and len(government_department) <= 150,
+            "Enter a government department (up to 150 characters).",
+        )
+        require(
+            bool(job_title.strip()) and len(job_title) <= 100,
+            "Enter a job title (up to 100 characters).",
+        )
     user_id = uid()
     # Preserve legacy NOT NULL wallet schema. This is an unlinked marker, never a chain address.
     c.execute(
@@ -101,6 +119,11 @@ def create_account(
             "INSERT INTO funding_member_profiles VALUES (?,?)",
             (user_id, organization.strip()),
         )
+        if government_department is not None:
+            c.execute(
+                "INSERT INTO government_funding_profiles VALUES (?,?,?)",
+                (user_id, government_department.strip(), job_title.strip()),
+            )
     return account(c, user_id)
 
 

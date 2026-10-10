@@ -10,39 +10,39 @@ A recycling rewards MVP with a Next.js interface and Python/FastAPI backend. Rec
 
 Open **http://localhost:3000**. The script installs project dependencies, uses Python 3.12 through `uv` (or an installed `python3.12`), and downloads a project-local Node 22 runtime if your installed Node is older. It starts the API, demo reward worker, and frontend. Requires npm and either uv or Python 3.12. Ctrl+C stops the services.
 
-The default demo needs no wallet, cloud account, API key, or Docker. SQLite data persists in `.data/loopmint.db`. It starts with five clearly labeled demo accounts (a recycler, three center staff accounts, and a funding partner) and $500 of simulated funding. Tokens, burns, and payouts are **simulated**, not blockchain transactions. Signing in with an actual wallet while in demo mode still uses the simulated token service.
+Starting the default demo needs no wallet, cloud account, API key, or Docker. The map-based ticket picker requires a configured Google Maps key and a real registered center; fictional demo centers are not offered in that picker. Automated browser tests mock Google and center enrollment to exercise the full flow offline. SQLite data persists in `.data/loopmint.db`. It starts with five clearly labeled demo accounts (a recycler, three center staff accounts, and a funding partner) and $500 of simulated funding. Tokens, burns, and payouts are **simulated**, not blockchain transactions. Signing in with an actual wallet while in demo mode still uses the simulated token service.
 
-1. Enter the recycler demo. Open **New drop-off**, enter 2 kg of cardboard, and choose a center manually or click **Use my location**. Create the ticket and copy its QR code text.
-2. Switch **Demo view → Center staff** for the selected center (Greenpoint, Williamsburg, or Downtown). Scan or paste the ticket, enter the accepted quantity, and confirm physical receipt.
+1. After configuring Google Maps and enrolling a center with its assigned staff login, sign in as a recycler. Open **New drop-off**, enter 2 kg of cardboard, and use location or address search, then explicitly choose a participating center from the Google map results. Create the ticket and copy its QR code text.
+2. Sign in as the worker assigned to the selected center. Scan or paste the ticket, enter the accepted quantity, and confirm physical receipt.
 3. Switch back to the recycler. Within a few seconds, 40 LOOP appears as received. Center approval and transaction confirmation have separate states.
-4. Open **Share** to edit the generated caption, use the device share action, or download the PNG card. Content is generated in the browser and published by the user on their own platform.
-5. Open **My wallet** for history and simulated redemption. Open **Funding partner** to add simulated funding and inspect reservations.
+4. Once the token reward is confirmed, open **Share** on that ticket. The standard template includes the accepted quantities and tokens actually received. Edit it, then choose **Share on X** or **Share on Reddit** to review and publish from your own account. Download the PNG card to attach it. Each rewarded ticket remains shareable from its activity row.
+5. Open **My wallet** to link a wallet, convert LOOP to USDC/SOL, and withdraw (simulated in demo mode). Open **Funding partner** to add simulated funding and inspect reservations.
 
 API documentation: http://127.0.0.1:8000/docs.
 
 ## What is implemented
 
-- Individual email/password sign-up for recyclers, operator-provisioned staff and funding-member logins, account details, password changes/resets, and staff job locations. See [accounts and Tiger Data setup](docs/ACCOUNTS_AND_TIGER_DATA.md).
+- Individual email/password sign-up for recyclers, site-restricted worker accounts, government fund-manager agency/department profiles, password changes/resets, and generated role test logins. See [accounts, Tiger Data setup, and test scenarios](docs/ACCOUNTS_AND_TIGER_DATA.md).
 - Recycler, assigned center verifier, and funding partner roles, enforced by the API.
 - Wallet Standard sign-in with one-time Ed25519 challenges and HttpOnly session cookies. New wallets always receive recycler access. Trusted roles are provisioned with an operator command.
 - Plastic bottle counts and integer-gram cardboard submissions, unique expiring QR tickets, camera scanning where supported, manual code entry, and ticket renewal.
-- Opt-in GPS center discovery, nearest-center selection, approximate distances, manual search, and tickets tied to the selected participating center.
+- Opt-in GPS with interactive Google Maps, real nearby Google Places listings, directions, approximate distances, and tickets restricted to registered participating centers.
 - Physical receipt confirmation, measured quantities, partial acceptance, rejection reasons, center restrictions, and self-approval prevention.
 - Rate snapshots, separate verification/payment states, integer reward calculations, atomic funding reservations, waiting-for-funding processing, and idempotent approvals/deposits/redemptions.
 - A durable worker with signed-transaction persistence before broadcast, signature reconciliation, and duplicate-safe retries. Distinct rewards include unique on-chain memos even when amounts and wallets match.
-- A real Solana Devnet SPL minting/burn adapter plus an explicitly simulated local adapter.
+- Solana Devnet transfers from an existing LOOP treasury, USDC/SOL conversion balances, and manual withdrawals, plus an explicitly simulated local adapter.
 - Wallet reward/redemption history, Devnet explorer links for actual signatures, aggregate impact and funding dashboards, and five-second polling.
-- Browser-only share captions and PNG cards, editable previews, copy/download fallbacks, canceled sharing behavior, and no server-side social content.
+- Per-ticket share prompts after reward confirmation, standard captions and PNG cards, X/Reddit composer links, editable previews, copy/download fallbacks, and no server-side social content. See [social sharing behavior](docs/SOCIAL_SHARING.md).
 - PostgreSQL through Psycopg 3, local SQLite fallback, and an optional TimescaleDB hypertable/continuous aggregate migration.
 - Docker definitions, a local launch script, backend tests against SQLite or PostgreSQL, and desktop/mobile Playwright flows.
 
 ## Find a recycling center
 
-In **New drop-off**, click **Use my location** and allow the browser's location request. Centers with registered coordinates are sorted by straight-line distance and the nearest listed center is selected. You can choose another center before creating the ticket. Search by name or neighborhood works without location access. Permission denial, unavailable GPS, and timeouts all retain manual selection.
+In **New drop-off**, click **Use my location** and allow the browser's location request. Google Maps displays your position and nearby recycling listings, including centers that have not enrolled in LoopMint. Change the radius or open directions from each result. See [Google Maps setup and behavior](docs/GOOGLE_MAPS.md). Choose **Use for my ticket** on an enrolled Google listing or select a green L marker for a registered center. You can also search a Google address, neighborhood, or postal code, then select a matching area to find nearby listings without device location. In VS Code, open `http://localhost:3000` in Chrome or Safari for device positioning; the embedded preview may time out. The separate ticket-center list and automatic test-center selection have been removed.
 
-Location is requested only on click and stays in browser memory until the page is closed, the form is left, or **Clear location** is used. The API receives only the selected center ID, never the recycler's coordinates. Distances are approximate, not travel routes. Browser geolocation requires HTTPS or localhost. A distant nearest result does not mean a center operates near you.
+Location is requested only on click and is shared with Google for maps and nearby search. LoopMint keeps it in browser memory until the page is closed, the form is left, or **Clear location** is used. The LoopMint API receives only the selected center ID, never the recycler's coordinates. Distances are approximate, not travel routes. Browser geolocation requires HTTPS or localhost. A distant nearest result does not mean a center operates near you.
 
-The demo includes **sample Brooklyn locations**, not verified public drop-off facilities. These samples have no directions links. In production, only registered participating centers can receive tickets, because their assigned staff must confirm intake. The app does not search a public directory of unrelated facilities.
+The demo includes **sample Brooklyn locations**, not verified public drop-off facilities. These samples have no directions links. Google search results contain actual listings, but only registered participating centers can receive tickets because their assigned staff must confirm intake. Operators match enrolled centers to Google results using verified Place IDs; discovery alone does not enable rewards.
 
 Register a participating center using its verified address and coordinates:
 
@@ -71,9 +71,11 @@ Copy `backend/.env.example` to the repository root as `.env`. Never commit keys 
 | `DEMO_AUTO_WORKER` | In-process demo worker; disable when using the standalone worker |
 | `DEMO_ACCOUNTS_ENABLED` | Disable shared demo logins and sample seeding for individual accounts; independent of simulated token mode |
 | `TIMESCALE_ENABLED` | Read the continuous aggregate after applying the Timescale migration |
+| `GOOGLE_MAPS_BROWSER_KEY` | Referrer-restricted browser key for Maps JavaScript API and Places API (New) |
+| `GOOGLE_MAPS_MAP_ID` | JavaScript map ID for Advanced Markers; `DEMO_MAP_ID` for local development |
 | `SOLANA_RPC_URL` | Devnet RPC; the adapter verifies the network genesis hash |
-| `SOLANA_MINT` | A classic SPL Token mint with exactly two decimals |
-| `SOLANA_ISSUER_KEYPAIR` | Server-side path to the mint authority/payer keypair JSON |
+| `SOLANA_MINT` | An existing classic SPL Token mint with 2–9 decimals |
+| `SOLANA_ISSUER_KEYPAIR` | Server-side path to the treasury owner/payer keypair JSON |
 
 `API_URL` is a **frontend build-time** setting for Next.js's `/api` proxy; defaults to `http://127.0.0.1:8000`. Browser requests remain same-origin. Keep the Python API behind that proxy or private networking when deployed.
 
@@ -81,45 +83,23 @@ Use different databases for demo and Devnet. The database records its mode and r
 
 ## Solana Devnet setup
 
-The included adapter is implemented and tested with signed transactions and mocked RPC responses. **No live tokens have been issued by this checkout.** Actual issuance requires your PostgreSQL database, Devnet-funded issuer keypair, mint, and a user-controlled Devnet wallet. The issuer's Devnet SOL pays transaction fees and associated token account rent.
+Use your existing LOOP mint and fund a dedicated server treasury with LOOP, Devnet SOL, and test USDC. Ticket confirmation credits the recycler's platform balance; wallet withdrawals transfer existing tokens without minting new LOOP. Users link their wallet with a signed ownership challenge.
 
-1. Configure a new PostgreSQL database, `APP_MODE=devnet`, your origin, and issuer keypair path. Fund the issuer with Devnet SOL. Keep the key outside this repository.
-2. Configure an existing compatible mint, or run the following explicit command to create one:
+LOOP conversion value is **remaining recorded fund ÷ distributed, unredeemed LOOP**, excluding unallocated treasury inventory. Users can convert their platform LOOP to USDC/SOL and withdraw either asset. See [wallet setup, pricing, migrations, and recovery](docs/WALLETS_AND_CONVERSIONS.md) for configuration and test limits.
 
-   ```bash
-   PYTHONPATH=backend .venv/bin/python -m app.cli create-devnet-mint
-   ```
+Use a separate PostgreSQL database/schema with `APP_MODE=devnet`, `DEMO_ACCOUNTS_ENABLED=false`, and server-only treasury keypair access. Configure centers and staff/fund-manager accounts using [the account guide](docs/ACCOUNTS_AND_TIGER_DATA.md). `./scripts/dev.sh` starts the worker automatically in Devnet mode. For separate service deployments, run the worker alongside the API:
 
-   Put the printed mint address in `SOLANA_MINT`. The configured issuer must be its mint authority. Mint decimals are fixed at 2.
-3. Register your real center with `configure-center` (see above), then provision trusted wallets from your server. Use its registered ID in `--center`:
-
-   ```bash
-   PYTHONPATH=backend .venv/bin/python -m app.cli grant-role \
-     --wallet YOUR_CENTER_WALLET --username 'Center staff' \
-     --role verifier --center greenpoint
-
-   PYTHONPATH=backend .venv/bin/python -m app.cli grant-role \
-     --wallet YOUR_PARTNER_WALLET --username 'Funding partner' \
-     --role funding_partner
-   ```
-
-4. Start the API/frontend with `./scripts/dev.sh`. Start the separate worker in another terminal:
-
-   ```bash
-   PYTHONPATH=backend .venv/bin/python -m app.worker
-   ```
-
-5. Sign in with each wallet; fund the simulated reward budget as the partner. Submit recycling as a recycler, then confirm as center staff. The worker mints Devnet tokens to the recycler's associated token account and waits for network confirmation.
-
-Devnet redemption prepares an exact burn transaction. The user authorizes it in their wallet; the API verifies its confirmed message, mint, amount, signer, and unique redemption memo before recording simulated credit. A pending redemption reserves its balance. If wallet submission was interrupted, recover the transaction signature from wallet history and use **Resume** to reconcile it. An expired unsigned burn or a confirmed failure requires operator reconciliation; the application never silently releases an uncertain burn or creates a replacement transaction.
+```bash
+PYTHONPATH=backend .venv/bin/python -m app.worker
+```
 
 ## Storage, money, and retries
 
-Bottles earn 5 LOOP each; cardboard earns 20 LOOP/kg. The token base unit is 0.01 LOOP. Store grams and base units as integers. The configured rates produce exact integer results; reward calculation floors division. Reserve demo cents **upward** to cover fractional LOOP. Redemptions accept whole LOOP only, at 1 LOOP = 1 simulated cent.
+Bottles earn 5 LOOP each; cardboard earns 20 LOOP/kg. The token base unit is 0.01 LOOP. Store grams and base units as integers. The configured rates produce exact integer results; reward calculation floors division. Reserve demo cents **upward** to cover fractional LOOP. The historical reward budget allocation is separate from the dynamic conversion rate described above. Legacy demo redemptions remain compatible; new Devnet conversions use My wallet.
 
 All authoritative writes use a transaction. PostgreSQL uses a shared transaction-scoped advisory lock across API and worker; SQLite uses `BEGIN IMMEDIATE`. This deliberately serializes writes for the MVP. Unique constraints additionally enforce one verification, reward, and job per claim. For higher traffic, replace the global lock with a consistent row-lock order after load testing.
 
-The worker commits signed bytes, signature, and last valid block height before broadcasting. A lost network response causes reconciliation of the same signature; retries rebroadcast identical bytes. Failed/expired transactions are marked `needs_review` and keep funding reserved. Operators must check the stored signature on Devnet before recovery; no automatic re-mint occurs. Inspect `reward_jobs.last_error` and the worker logs. This is intentionally conservative around uncertain transactions.
+The worker commits signed bytes, signature, and last valid block height before broadcasting. A lost network response causes reconciliation of the same signature; retries rebroadcast identical bytes. Failed/expired reward jobs are marked `needs_review`; withdrawals enter `review` and keep funding reserved. Operators must check the stored signature on Devnet before recovery; no automatic re-mint occurs. Inspect `reward_jobs.last_error` and the worker logs. This is intentionally conservative around uncertain transactions.
 
 ## PostgreSQL and TimescaleDB
 
@@ -158,7 +138,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Use Node 22+ for npm commands, or prepend `.tools/node_modules/node/bin` to `PATH` after the launch script has installed its local runtime. Browser tests create demo claims and funding records; run them against a demo database. They cover desktop and mobile layouts, submission/approval/reward flow, PNG downloads, share cancellation/fallbacks, simulated redemption, funding, rejection, GPS permission/failure cases, nearest-center ticket selection, manual overrides, and location privacy. GPS tests use mocked positions, not your device location.
+Use Node 22+ for npm commands, or prepend `.tools/node_modules/node/bin` to `PATH` after the launch script has installed its local runtime. Browser tests create demo claims and funding records; run them against a demo database. They cover desktop and mobile layouts, submission/approval/reward flow, PNG downloads, share cancellation/fallbacks, conversion and LOOP/USDC/SOL withdrawals, funding, rejection, GPS permission/failure cases, explicit map selection, cleared selections, and location privacy. GPS tests use mocked positions, not your device location.
 
 ## Deployment and remaining setup
 

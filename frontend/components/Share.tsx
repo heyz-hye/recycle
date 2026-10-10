@@ -1,25 +1,58 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Copy, Download, Share2, Check } from "lucide-react";
-import { Claim, quantity, tokens } from "@/lib/api";
+import { Copy, Download, Share2, Check, ExternalLink } from "lucide-react";
+import { Claim, RecyclingTotals, quantity, tokens } from "@/lib/api";
+import {
+  canShareReward,
+  shareCaption,
+  shareTitle,
+  socialComposeLinks,
+  totalShareTitle,
+  totalShareCaption,
+} from "@/lib/sharing";
 import Modal from "./Modal";
 const disclaimer = "Solana Devnet demo tokens - no real monetary value.";
 export default function Share({
   claim,
+  totals,
   demo,
   onClose,
 }: {
-  claim: Claim;
   demo: boolean;
   onClose: () => void;
-}) {
-  const items = claim.items.filter((i) => (i.accepted_quantity || 0) > 0);
-  const received = claim.reward?.state === "confirmed";
+} & (
+  | { claim: Claim; totals?: never }
+  | { totals: RecyclingTotals; claim?: never }
+)) {
+  const items = totals
+    ? [
+        {
+          material: "bottles" as const,
+          submitted_quantity: 0,
+          accepted_quantity: totals.bottles,
+        },
+        {
+          material: "cardboard" as const,
+          submitted_quantity: 0,
+          accepted_quantity: totals.cardboard_grams,
+        },
+      ].filter((i) => i.accepted_quantity > 0)
+    : claim.items.filter((i) => (i.accepted_quantity || 0) > 0);
+  const received = totals ? items.length > 0 : canShareReward(claim);
+  const rewardAmount = totals
+    ? totals.reward_base_units
+    : claim.reward?.amount_base_units || 0;
+  const standardCaption = totals
+    ? totalShareCaption(totals)
+    : shareCaption(claim);
+  const title = totals ? "Share your total impact" : "Share your impact";
   const label = demo
     ? "Simulated demo tokens - no real monetary value."
     : disclaimer;
-  const [caption, setCaption] = useState(
-    `I dropped off ${items.map((i) => quantity(i, true)).join(" and ")} for recycling, confirmed by my recycling center.${received ? ` I received ${tokens(claim.reward!.amount_base_units)} LOOP demo tokens. ${label}` : ""} #LoopMint #Recycling`,
+  const [caption, setCaption] = useState(standardCaption);
+  const links = socialComposeLinks(
+    totals ? totalShareTitle(totals) : shareTitle(claim),
+    caption,
   );
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,7 +74,13 @@ export default function Share({
     c.fillText("↻  loopmint", 80, 100);
     c.fillStyle = "#c2d5cb";
     c.font = "22px sans-serif";
-    c.fillText("CENTER-CONFIRMED RECYCLING INTAKE", 80, 240);
+    c.fillText(
+      totals
+        ? "MY TOTAL RECYCLING IMPACT"
+        : "CENTER-CONFIRMED RECYCLING INTAKE",
+      80,
+      240,
+    );
     c.fillStyle = "#ffffff";
     c.font = "bold 76px sans-serif";
     c.fillText("A little action.", 80, 350);
@@ -52,7 +91,7 @@ export default function Share({
       c.fillStyle = "#c7ed8b";
       c.font = "bold 42px sans-serif";
       c.fillText(
-        `${tokens(claim.reward!.amount_base_units)} LOOP received`,
+        `${tokens(rewardAmount)} LOOP ${totals ? "earned in total" : "received"}`,
         80,
         810,
       );
@@ -62,7 +101,7 @@ export default function Share({
     c.fillStyle = "#a9c4b6";
     c.font = "24px sans-serif";
     c.fillText("Small steps. Full circle.  #LoopMint", 80, 987);
-  }, [claim, demo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [claim, totals, demo]); // eslint-disable-line react-hooks/exhaustive-deps
   const blob = () =>
     new Promise<Blob>((resolve, reject) =>
       canvas.current?.toBlob(
@@ -87,11 +126,22 @@ export default function Share({
       setBusy(false);
     }
   }
+  if (!received)
+    return (
+      <Modal title="Share your impact" onClose={onClose}>
+        <p>
+          Your post will be ready once your ticket’s token reward is confirmed.
+        </p>
+      </Modal>
+    );
   return (
-    <Modal title="Share your impact" onClose={onClose} wide>
+    <Modal title={title} onClose={onClose} wide>
       <p className="muted modal-intro">
-        A small moment worth sharing. Make it your own, then post it on your
-        favorite platform.
+        {totals
+          ? "Celebrate everything you’ve recycled and all the LOOP you’ve earned. "
+          : "Your reward has arrived. "}
+        Edit your post, then review and publish it from your own X or Reddit
+        account.
       </p>
       <div className="share-grid">
         <canvas
@@ -112,6 +162,57 @@ export default function Share({
           <p className="small muted">
             Only confirmed intake and received rewards appear. Your wallet,
             ticket, and private evidence stay private.
+          </p>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => setCaption(standardCaption)}
+          >
+            Reset to standard template
+          </button>
+          <div className="button-row" aria-label="Choose a social platform">
+            <a
+              className="button primary"
+              href={links.x}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Share on X <ExternalLink size={16} />
+            </a>
+            <a
+              className="button primary"
+              href={links.reddit}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                setFeedback(
+                  "In Reddit, choose your profile or a community, review the post, and publish when ready.",
+                );
+                if (navigator.clipboard) {
+                  void navigator.clipboard.writeText(caption).then(
+                    () =>
+                      setFeedback(
+                        "Caption copied. Paste it into Reddit if the post body is blank, then review and publish.",
+                      ),
+                    () =>
+                      setFeedback(
+                        "Reddit may leave the post body blank. Copy the caption here and paste it into your post.",
+                      ),
+                  );
+                } else {
+                  setFeedback(
+                    "Reddit may leave the post body blank. Select and copy the caption here, then paste it into your post.",
+                  );
+                }
+              }}
+            >
+              Share on Reddit <ExternalLink size={16} />
+            </a>
+          </div>
+          <p className="small muted">
+            Sign in on the platform if asked. On Reddit, choose your profile or
+            a community. You decide when to publish. Download the card below if
+            you want to attach it to your post.
           </p>
           <button
             disabled={busy}

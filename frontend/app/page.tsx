@@ -52,6 +52,7 @@ import {
   User,
   Claim,
   WalletData,
+  RecyclingTotals,
   Impact,
   Funding,
   Center,
@@ -67,6 +68,8 @@ import {
 import { wallets, loginWallet, signBurn } from "@/lib/wallet";
 import Modal from "@/components/Modal";
 import Share from "@/components/Share";
+import AssetWallet from "@/components/AssetWallet";
+import { canShareReward } from "@/lib/sharing";
 import Scanner from "@/components/Scanner";
 import CenterPicker from "@/components/CenterPicker";
 import { AccountLogin, AccountDetails } from "@/components/Account";
@@ -158,6 +161,7 @@ export default function Home() {
   const [mobileNav, setMobileNav] = useState(false);
   const [ticket, setTicket] = useState<Claim | null>(null);
   const [share, setShare] = useState<Claim | null>(null);
+  const [shareTotals, setShareTotals] = useState<RecyclingTotals | null>(null);
   const [selected, setSelected] = useState<Claim | null>(null);
   const [showConnect, setShowConnect] = useState(false);
   const [showRedeem, setShowRedeem] = useState(false);
@@ -261,6 +265,7 @@ export default function Home() {
     setTicket(null);
     setSelected(null);
     setShare(null);
+    setShareTotals(null);
     setShowRedeem(false);
   }
   async function demoLogin(account: string) {
@@ -274,23 +279,12 @@ export default function Home() {
     setError("");
   }
   const accepted = claims.filter((c) => c.status === "verified");
-  const myBottleCount = accepted.reduce(
-    (n, c) =>
-      n +
-      c.items
-        .filter((i) => i.material === "bottles")
-        .reduce((a, i) => a + (i.accepted_quantity || 0), 0),
-    0,
+  const totals = wallet?.totals;
+  const myBottleCount = totals?.bottles || 0;
+  const myCardboard = totals?.cardboard_grams || 0;
+  const prompt = accepted.find(
+    (c) => canShareReward(c) && !dismissed.includes(c.id),
   );
-  const myCardboard = accepted.reduce(
-    (n, c) =>
-      n +
-      c.items
-        .filter((i) => i.material === "cardboard")
-        .reduce((a, i) => a + (i.accepted_quantity || 0), 0),
-    0,
-  );
-  const prompt = accepted.find((c) => !dismissed.includes(c.id));
   const nav: { id: Page; icon: ReactNode }[] = [
     { id: "overview", icon: <LayoutDashboard size={19} /> },
     ...(user?.role === "recycler"
@@ -364,7 +358,7 @@ export default function Home() {
                 >
                   <ChevronRight size={20} />
                 </button>
-              ) : c.status === "verified" ? (
+              ) : canShareReward(c) ? (
                 <button
                   className="button small-button secondary"
                   onClick={() =>
@@ -375,6 +369,8 @@ export default function Home() {
                 >
                   <Share2 size={14} /> Share
                 </button>
+              ) : c.status === "verified" ? (
+                <span className="small muted">Share once rewards arrive</span>
               ) : c.status !== "rejected" ? (
                 <button className="text-button" onClick={() => setTicket(c)}>
                   View ticket <ArrowUpRight size={14} />
@@ -727,11 +723,7 @@ export default function Home() {
               <section className="stats-grid">
                 <Stat
                   label="Your confirmed rewards"
-                  value={tokens(
-                    wallet?.rewards
-                      .filter((r) => r.state === "confirmed")
-                      .reduce((n, r) => n + r.amount_base_units, 0) || 0,
-                  )}
+                  value={tokens(totals?.reward_base_units || 0)}
                   unit="LOOP"
                   icon={<CircleDollarSign size={19} />}
                   note="Earned from center-confirmed intake"
@@ -751,6 +743,30 @@ export default function Home() {
                   note="Measured and confirmed by your center"
                 />
               </section>
+              {user.role === "recycler" && (
+                <div className="total-impact-share">
+                  <div>
+                    <strong>Your impact, all together.</strong>
+                    <p className="small muted">
+                      Share your lifetime recycling and total LOOP earned.
+                    </p>
+                  </div>
+                  <button
+                    className="button secondary"
+                    disabled={
+                      !totals || (myBottleCount === 0 && myCardboard === 0)
+                    }
+                    onClick={() => totals && setShareTotals({ ...totals })}
+                  >
+                    <Share2 size={16} /> Share total impact
+                  </button>
+                  {totals && myBottleCount === 0 && myCardboard === 0 && (
+                    <p className="small muted">
+                      Available after your first center-confirmed drop-off.
+                    </p>
+                  )}
+                </div>
+              )}
               {user.role === "recycler" && prompt && (
                 <div className="share-prompt">
                   <span className="check-disc">
@@ -759,8 +775,9 @@ export default function Home() {
                   <div>
                     <strong>That’s an impact worth sharing.</strong>
                     <p>
-                      Your drop-off is center confirmed. Create a post for your
-                      own social platform.
+                      You received {tokens(prompt.reward!.amount_base_units)}{" "}
+                      LOOP for this drop-off. Share your recycling and reward on
+                      X or Reddit.
                     </p>
                   </div>
                   <button
@@ -916,50 +933,12 @@ export default function Home() {
                 title="Good things come around."
                 text="Your rewards, from center confirmation to your wallet."
               />
-              <div className="wallet-grid">
-                <div className="wallet-card">
-                  <span className="hero-kicker">AVAILABLE BALANCE</span>
-                  <div>
-                    {tokens(wallet?.balance_base_units || 0)}{" "}
-                    <small>LOOP</small>
-                  </div>
-                  <p>
-                    {tokens(wallet?.pending_base_units || 0)} LOOP awaiting
-                    funding or transaction confirmation
-                  </p>
-                  <button
-                    className="button lime"
-                    disabled={!wallet || wallet.balance_base_units < 100}
-                    onClick={() => setShowRedeem(true)}
-                  >
-                    Simulate redemption <ArrowUpRight size={17} />
-                  </button>
-                  <span className="wallet-label">
-                    {demo ? "Simulated tokens" : "Solana Devnet tokens"} · No
-                    real monetary value
-                  </span>
-                </div>
-                <div className="panel wallet-explainer">
-                  <ShieldCheck size={30} />
-                  <h2>Confirmed means received.</h2>
-                  <p>
-                    Rewards become available once the token transaction is
-                    confirmed. Center approval is the first step.
-                  </p>
-                  <p className="small">
-                    Demo conversion: 1 LOOP = $0.01 of simulated credit. No
-                    actual money is paid.
-                  </p>
-                  {!demo && (
-                    <button
-                      className="button secondary"
-                      onClick={() => setShowConnect(true)}
-                    >
-                      Reconnect wallet
-                    </button>
-                  )}
-                </div>
-              </div>
+              <AssetWallet
+                key={user.id}
+                user={user}
+                onConnect={() => setShowConnect(true)}
+                onUpdated={load}
+              />
               <section className="panel">
                 <div className="panel-heading">
                   <h2>Reward history</h2>
@@ -981,7 +960,7 @@ export default function Home() {
                       <strong className="green">
                         +{tokens(r.amount_base_units)} LOOP
                       </strong>
-                      {r.signature && !r.signature.startsWith("demo:") && (
+                      {r.signature && !r.signature.includes(":") && (
                         <a
                           className="icon-button"
                           href={explorer(r.signature)}
@@ -1246,12 +1225,21 @@ export default function Home() {
       )}
       {share && (
         <Share
+          key={share.id}
           claim={share}
           demo={demo}
           onClose={() => {
             setDismissed([...dismissed, share.id]);
             setShare(null);
           }}
+        />
+      )}
+      {shareTotals && user.role === "recycler" && (
+        <Share
+          key="total-impact"
+          totals={shareTotals}
+          demo={demo}
+          onClose={() => setShareTotals(null)}
         />
       )}
       {selected && (
@@ -1349,10 +1337,10 @@ function Dropoff({
 }) {
   const [bottles, setBottles] = useState("");
   const [cardboard, setCardboard] = useState("");
-  const [center, setCenter] = useState("greenpoint");
+  const [center, setCenter] = useState("");
   const [locating, setLocating] = useState(false);
   const selectedCenter =
-    centers.find((c) => c.id === center)?.id || centers[0]?.id || "";
+    centers.find((c) => c.id === center && !c.is_demo)?.id || "";
   const [error, setError] = useState("");
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -1375,7 +1363,7 @@ function Dropoff({
     }
     setError("");
     if (!selectedCenter || locating) {
-      setError("Choose a center or wait for the location search to finish.");
+      setError("Choose a participating center from the map results.");
       return;
     }
     onSubmit({ center_id: selectedCenter, items });

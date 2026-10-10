@@ -14,12 +14,15 @@ The authoritative, repeatable schema is [`backend/sql/schema.sql`](../backend/sq
 | `centers` | Job/drop-off locations: `id`, `name` (such as Greenhill Recycling Center), `address` |
 | `center_locations` | Optional registered center latitude/longitude and demo marker |
 | `funding_member_profiles` | One funding-member profile per user: `user_id`, `organization` |
+| `government_funding_profiles` | Government fund-manager employment: `user_id` references `funding_member_profiles`, `department`, `job_title`; the government agency is the linked `organization` |
 | `sessions` | Hashed session token, individual `user_id`, expiry |
 | `auth_attempts` | Temporary hashed email/IP rate-limit keys, attempt count, expiry |
 
 Staff job location is the foreign key **`users.center_id → centers.id`**. `/api/auth/me` exposes the center name as **`job_location`**, its address as `job_address`, and the staff member's `job_title`. The account screen and staff workspace display these values. Center assignments are checked on every ticket read and confirmation. Confirmations retain the individual `verifier_id`, and funding deposits retain the individual `actor_id`.
 
 Roles retain their existing internal values: `recycler`, `verifier` (staff), and `funding_partner` (funding member). One shared identity table avoids duplicate accounts and keeps claim/session foreign keys stable. Profile records add role-specific information. Provisioning validates staff locations and funding organizations transactionally.
+
+Government fund managers use the funding permission role plus a government employment profile. `/api/auth/me` returns `government_agency`, `government_department`, and `job_title`, displayed in **My account**. The operator verifies employment outside the app before provisioning; public registration cannot assign this role or these fields. Existing funding accounts remain compatible. Managers can view the shared budget and record funding, which reserves funds for already-confirmed rewards. They cannot submit or confirm recycling tickets. Workers cannot access funding controls. The current MVP simulates funds and redemptions; it does not connect to a government treasury or transfer bank money.
 
 Email accounts initially have a unique `account:<user-id>` wallet marker for compatibility with the existing non-null wallet schema. It is not a wallet address or private key. **My account → Link Solana wallet** requires a signed challenge and preserves the existing account ID. A wallet already belonging to another account cannot be claimed. Devnet tickets require a linked wallet; simulated rewards do not. Wallet replacement/merging requires operator review.
 
@@ -61,6 +64,50 @@ PYTHONPATH=backend .venv/bin/python -m app.cli create-account \
 ```
 
 Each command privately prompts for a 15–128 character password and confirmation. Passwords are never passed in command-line arguments or printed. Use actual individual addresses and provide credentials through your organization's established private process. The app does not send email. Recyclers can register in the app; operators can also use `create-account --role recycler`.
+
+For a government fund manager, use the explicit operator role alias and their verified agency and department:
+
+```bash
+PYTHONPATH=backend .venv/bin/python -m app.cli create-account \
+  --email official@example.com --name 'Morgan Lee' --role fund_manager \
+  --organization 'ACTUAL_GOVERNMENT_AGENCY' --department 'Environmental Services' \
+  --job-title 'Recycling Fund Manager'
+```
+
+## Test logins and role scenarios
+
+Run the following explicitly against the intended **simulated** database. It creates four individual email/password logins and two clearly fictional test sites, with sample coordinates marked as demo. Shared demo login remains disabled when `DEMO_ACCOUNTS_ENABLED=false`.
+
+```bash
+PYTHONPATH=backend .venv/bin/python -m app.cli create-test-accounts
+```
+
+The generated passwords are unique and stored only in `.data/test-role-logins.json` (file permissions `0600`, ignored by Git). The database stores password hashes. Existing output files, accounts, and centers are never replaced. Use the existing credential file on subsequent runs, or the private `reset-password` command when necessary. Provisioning creates no tickets, funding entries, or rewards and refuses to run outside `APP_MODE=demo`.
+
+| Login | Role and assignment |
+| --- | --- |
+| `recycler@loopmint.example` | Recycler; creates tickets |
+| `worker.greenhill@loopmint.example` | Worker assigned only to `test-greenhill` |
+| `worker.riverside@loopmint.example` | Worker assigned only to `test-riverside` |
+| `fund.manager@loopmint.example` | Government fund manager; fictional agency and Environmental Services department |
+
+Sign in at `http://localhost:3000` using the normal email/password form. Use separate browser profiles or sign out between roles. Check each worker’s assigned site in **My account** and the manager’s agency, department, and job title. The manager can add simulated funding from **Funding**.
+
+The fictional sites are not listed in the drop-off picker. The picker now requires an explicit selection from the Google map/results, and no longer automatically assigns a test center. Use the isolated API scenarios below to generate tickets for both fictional sites and exercise confirmation and funding. For manual end-to-end testing with a real enrolled center, configure its verified map location/Place ID and provision its assigned worker.
+
+Automated API scenarios in `backend/tests/test_role_scenarios.py` run against isolated databases and cover both directions of cross-site read/open/approve/reject denial, individual audit IDs, manager permission boundaries, duplicate funding, and reward issuance. For browser login checks, provision the same fixtures in an isolated database and pass its credential-file path through `E2E_ROLE_CREDENTIALS` when running `frontend/tests/role-logins.spec.ts`. Never run the full browser suite against your live Tiger Data database.
+
+```bash
+PYTHONPATH=backend DATABASE_URL=sqlite:///.data/role-browser-tests.db \
+  DEMO_ACCOUNTS_ENABLED=true .venv/bin/python -m app.cli create-test-accounts \
+  --output .data/role-browser-test-logins.json
+# Start a test API/frontend for this database (see GOOGLE_MAPS.md), then:
+PATH="$PWD/.tools/node_modules/node/bin:$PATH" E2E_URL=http://127.0.0.1:3001 \
+  E2E_ROLE_CREDENTIALS="$PWD/.data/role-browser-test-logins.json" \
+  npm run test:e2e --prefix frontend -- role-logins.spec.ts accounts.spec.ts
+```
+
+## Password recovery
 
 Users change their password in **My account**. Other sessions are revoked. For recovery, an operator verifies the person's identity outside the app, then runs:
 

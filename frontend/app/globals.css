@@ -602,6 +602,17 @@ input[type="checkbox"] {
 .stats-grid.four {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
+.total-impact-share {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 25px;
+}
+.total-impact-share p {
+  margin: 5px 0 0;
+}
 .stat-card {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -2480,4 +2491,237 @@ input[type="checkbox"] {
   color: #fff;
   border-radius: 10px;
   width: 42px;
+}
+.google-discovery {
+  margin: 22px 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.google-map-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.google-map-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.google-map-heading label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin: 0;
+}
+.google-map-heading select {
+  width: auto;
+  padding: 8px;
+}
+.google-map-canvas {
+  height: 340px;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #edf1e8;
+}
+.google-map-canvas.map-unavailable {
+  display: none;
+}
+.google-map-legend {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 10px 0;
+}
+.google-pin {
+  display: block;
+  padding: 7px 10px;
+  border: 2px solid white;
+  border-radius: 20px;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px #0004;
+}
+.google-place-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: grid;
+  gap: 10px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+.google-place-list li {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+}
+.google-place-list li.active {
+  border-color: #789b54;
+  background: #f2f6ea;
+}
+.google-place-title {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+}
+.google-place-title > span {
+  padding: 3px 8px;
+  border-radius: 50%;
+  background: #edf1e8;
+}
+.google-place-list p {
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.google-attribution {
+  display: block;
+  font-size: 10px;
+  margin-top: 7px;
+}
+.participating-title {
+  margin: 20px 0 12px;
+}
+@media (max-width: 560px) {
+  .google-map-canvas {
+    height: 280px;
+  }
+}
+.maps-information {
+  max-width: 760px;
+  margin: 50px auto;
+  padding: 0 24px 50px;
+}
+.maps-information h1 {
+  margin: 32px 0;
+}
+.maps-information section {
+  margin: 32px 0;
+  scroll-margin-top: 24px;
+}
+.maps-information p {
+  margin: 14px 0;
+  line-height: 1.8;
+}
+.maps-information a,
+.location-privacy a {
+  text-decoration: underline;
+}
+.address-search {
+  margin: 18px 0 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f7f9f2;
+}
+.address-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.address-search-row input {
+  min-width: 0;
+  flex: 1;
+}
+.address-search-row .button {
+  flex-shrink: 0;
+}
+.address-status {
+  margin-top: 12px;
+}
+.address-results {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.address-results li {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+.address-results button {
+  border: 0;
+  padding: 0;
+  width: 100%;
+  background: transparent;
+  text-align: left;
+  color: var(--ink);
+}
+.address-results span {
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.google-text-attribution {
+  display: block;
+  font: 400 12px sans-serif;
+  color: #5e5e5e;
+  white-space: nowrap;
+  margin-top: 12px;
+}
+@media (max-width: 560px) {
+  .address-search-row {
+    flex-direction: column;
+  }
+}
+
+.asset-wallet {
+  margin-bottom: 25px;
+}
+.asset-summary > p,
+.asset-summary > .asset-actions {
+  margin: 16px 22px;
+}
+.asset-balances {
+  padding: 0 22px;
+  margin-top: 20px;
+}
+.asset-balances .stat-value {
+  font-size: 28px;
+  overflow-wrap: anywhere;
+}
+.asset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.asset-history-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  border-top: 1px solid var(--line);
+}
+.asset-history-row > div {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+.quote-preview {
+  margin-top: 18px;
+}
+@media (max-width: 700px) {
+  .asset-balances {
+    grid-template-columns: 1fr;
+  }
 }

@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     demo_auto_worker: bool = True
     demo_accounts_enabled: bool = True
     timescale_enabled: bool = False
+    google_maps_browser_key: str = ""
+    google_maps_map_id: str = "DEMO_MAP_ID"
     ticket_ttl_seconds: int = 1800
     solana_rpc_url: str = "https://api.devnet.solana.com"
     solana_mint: str = ""
@@ -20,6 +22,9 @@ class Settings(BaseSettings):
     token_decimals: int = 2
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
+    # Devnet-only payout assets. Set the official Circle Devnet USDC mint.
+    solana_usdc_mint: str = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+    treasury_fee_reserve_lamports: int = 10000000
 
     def validate_runtime(self):
         parsed = urlsplit(self.database_url)
@@ -36,7 +41,7 @@ class Settings(BaseSettings):
                 )
         if self.token_decimals != 2:
             raise ValueError(
-                "The MVP uses two token decimals; configure the mint accordingly."
+                "Platform accounting uses two LOOP decimals; the on-chain mint may use 2 to 9."
             )
         if self.app_mode == "devnet" and not self.database_url.startswith("postgres"):
             raise ValueError("Devnet mode requires PostgreSQL.")

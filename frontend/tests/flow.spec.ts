@@ -1,4 +1,33 @@
 import { test, expect, Page } from "@playwright/test";
+import { mockGoogleMaps } from "./helpers/google-maps";
+
+async function selectTicketCenter(page: Page) {
+  await page
+    .getByLabel("Or search by address, neighborhood, or postal code")
+    .fill("Greenpoint, Brooklyn");
+  await page
+    .getByRole("button", { name: "Search location", exact: true })
+    .click();
+  await page.locator(".address-results button").click();
+  await page
+    .getByRole("button", { name: "Use for my ticket", exact: true })
+    .and(page.locator(":enabled"))
+    .click();
+}
+test.beforeEach(async ({ page }) => {
+  await mockGoogleMaps(page, [
+    {
+      id: "greenpoint",
+      name: "Greenpoint Recycling Center",
+      address: "Test listing",
+      latitude: 40.7405,
+      longitude: -73.9544,
+      is_demo: 0,
+      google_place_id: "enrolled",
+    },
+  ]);
+});
+
 async function nav(page: Page, name: string) {
   await expect(page.locator(".topbar")).toBeVisible();
   const menu = page.getByRole("button", { name: "Open navigation" });
@@ -27,6 +56,7 @@ test("complete center-confirmed reward and external sharing flow", async ({
       .getByRole("button", { name: "Center workspace" }),
   ).toHaveCount(0);
   await nav(page, "New drop-off");
+  await selectTicketCenter(page);
   await page.getByLabel("Dry cardboard", { exact: true }).fill("2");
   await page.getByRole("button", { name: "Create drop-off ticket" }).click();
   const dialog = page.getByRole("dialog");
@@ -85,8 +115,8 @@ test("complete center-confirmed reward and external sharing flow", async ({
   ).toBeVisible();
   await expect(dialog.getByLabel("Your caption")).toHaveValue(/2 kg cardboard/);
   await expect(dialog.getByLabel("Your caption")).toHaveValue(/40 LOOP/);
-  await expect(dialog.getByLabel("Your caption")).toHaveValue(
-    /no real monetary value/,
+  await expect(dialog.getByLabel("Your caption")).not.toHaveValue(
+    /simulated|demo|devnet|monetary value/i,
   );
   expect(await dialog.getByLabel("Your caption").inputValue()).not.toContain(
     ticket,
@@ -103,16 +133,14 @@ test("complete center-confirmed reward and external sharing flow", async ({
     page.getByRole("heading", { name: "Good things come around." }),
   ).toBeVisible();
   expect(await page.locator('a[href*="explorer.solana.com"]').count()).toBe(0);
-  await page
-    .getByRole("button", { name: "Simulate redemption", exact: true })
-    .click();
-  await dialog.getByLabel("Whole LOOP tokens to redeem").fill("1");
-  await dialog
-    .getByRole("button", { name: "Confirm simulated redemption" })
-    .click();
+  await page.getByRole("button", { name: "Convert LOOP", exact: true }).click();
+  await dialog.getByLabel("LOOP amount").fill("1");
+  await dialog.getByRole("button", { name: "Preview conversion" }).click();
+  await expect(dialog.locator(".quote-preview")).toContainText("You receive");
+  await dialog.getByRole("button", { name: "Confirm conversion" }).click();
   await expect(dialog).not.toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Simulated redemptions" }),
+    page.getByRole("heading", { name: "Conversion history" }),
   ).toBeVisible();
   await nav(page, "Our impact");
   await expect(
@@ -213,6 +241,7 @@ test("ticket scan has manual fallback and rejection does not reward", async ({
   await page.goto("/");
   await page.getByRole("button", { name: "Try the recycler demo" }).click();
   await nav(page, "New drop-off");
+  await selectTicketCenter(page);
   await page.getByLabel("Plastic bottles", { exact: true }).fill("3");
   await page.getByRole("button", { name: "Create drop-off ticket" }).click();
   const dialog = page.getByRole("dialog");

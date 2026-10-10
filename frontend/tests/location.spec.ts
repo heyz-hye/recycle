@@ -5,7 +5,9 @@ import {
   validCoordinates,
   directionsUrl,
 } from "../lib/location";
+import { mergeRegisteredPlaces } from "../lib/google-maps";
 import type { Center } from "../lib/api";
+import { mockGoogleMaps } from "./helpers/google-maps";
 
 async function dropoff(page: Page) {
   await page.goto("/");
@@ -17,285 +19,164 @@ async function dropoff(page: Page) {
     .locator("nav")
     .getByRole("button", { name: "New drop-off", exact: true })
     .click();
-  if (await menu.isVisible())
-    await expect(page.locator(".sidebar")).not.toBeVisible();
-  await expect(
-    page.getByRole("radio", { name: "Williamsburg Demo Center", exact: true }),
-  ).toBeVisible();
 }
 
-test("location requests are opt-in, select nearest center, and bind its ticket", async ({
+test("test centers and duplicate search are absent and never silently selected", async ({
+  page,
+}, info) => {
+  await dropoff(page);
+  await expect(
+    page.getByRole("heading", { name: "LoopMint ticket centers" }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Search centers", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.locator(".center-options, .location-demo, .selected-center"),
+  ).toHaveCount(0);
+  await page.getByLabel("Dry cardboard", { exact: true }).fill("2");
+  await expect(
+    page.getByRole("button", { name: "Create drop-off ticket" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByLabel("Or search by address, neighborhood, or postal code"),
+  ).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("clean-center-picker.png"),
+    fullPage: true,
+  });
+});
+
+for (const [code, message] of [
+  [1, "permission was declined"],
+  [3, "took too long"],
+] as const) {
+  test(`location error ${code} keeps address search available without a default ticket center`, async ({
+    page,
+  }) => {
+    await page.addInitScript((code) => {
+      navigator.geolocation.getCurrentPosition = (_success, error) =>
+        error!({ code } as GeolocationPositionError);
+    }, code);
+    await dropoff(page);
+    await page
+      .getByRole("button", { name: "Use my location", exact: true })
+      .click();
+    await expect(page.locator(".location-status")).toContainText(message);
+    await expect(
+      page.getByLabel("Or search by address, neighborhood, or postal code"),
+    ).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "Create drop-off ticket" }),
+    ).toBeDisabled();
+  });
+}
+
+test("explicit Google selection binds the ticket, and clearing location clears the selection", async ({
   page,
   context,
-}, testInfo) => {
+}) => {
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({
-    latitude: 40.71451,
-    longitude: -73.96141,
+    latitude: 40.7305,
+    longitude: -73.9544,
     accuracy: 20,
   });
-  await page.addInitScript(() => {
-    const original = navigator.geolocation.getCurrentPosition.bind(
-      navigator.geolocation,
-    );
-    (window as unknown as { locationCalls: number }).locationCalls = 0;
-    navigator.geolocation.getCurrentPosition = (...args) => {
-      (window as unknown as { locationCalls: number }).locationCalls++;
-      original(...args);
-    };
-  });
+  await mockGoogleMaps(page, [
+    {
+      id: "greenpoint",
+      name: "Registered recycling center",
+      address: "Test listing",
+      latitude: 40.7405,
+      longitude: -73.9544,
+      is_demo: 0,
+      google_place_id: "enrolled",
+    },
+  ]);
   await dropoff(page);
   expect(
     await page.evaluate(
-      () => (window as unknown as { locationCalls: number }).locationCalls,
+      () =>
+        (window as unknown as { googleSearches: unknown[] }).googleSearches
+          .length,
     ),
   ).toBe(0);
   await page
     .getByRole("button", { name: "Use my location", exact: true })
     .click();
-  const closest = page.getByRole("radio", {
-    name: "Williamsburg Demo Center",
-    exact: true,
-  });
-  await expect(closest).toBeChecked();
-  await expect(page.locator(".center-option").first()).toContainText(
-    "Williamsburg Demo Center",
+  await expect(
+    page
+      .getByRole("button", { name: "Use for my ticket", exact: true })
+      .and(page.locator(":enabled")),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Create drop-off ticket" }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Use for my ticket", exact: true })
+    .and(page.locator(":enabled"))
+    .click();
+  await expect(page.locator(".selected-center")).toContainText(
+    "Registered recycling center",
   );
-  await expect(page.locator(".center-option").first()).toContainText(
-    "Less than 100 m away",
-  );
-  await expect(page.locator(".center-option").first()).toContainText(
-    "Nearest listed",
-  );
-  await expect(page.locator(".location-privacy").last()).toContainText("20 m");
-  await page.getByLabel("Dry cardboard", { exact: true }).fill("2");
-  await page.screenshot({
-    path: testInfo.outputPath("nearest-centers.png"),
-    fullPage: true,
-  });
-  const request = page.waitForRequest(
-    (r) => r.url().endsWith("/api/claims") && r.method() === "POST",
-  );
-  await page.getByRole("button", { name: "Create drop-off ticket" }).click();
-  const payload = (await request).postDataJSON();
-  expect(Object.keys(payload).sort()).toEqual(["center_id", "items"]);
-  expect(payload.center_id).toBe("williamsburg");
-  await expect(page.getByRole("dialog")).toContainText(
-    "Williamsburg Demo Center",
-  );
-  const code = await page.getByRole("dialog").locator("code").innerText();
-  const claim = (await (await page.request.get("/api/claims")).json()).find(
-    (c: { ticket: string }) => c.ticket === code,
-  );
-  expect(claim.center_id).toBe("williamsburg");
+  await expect(
+    page.getByRole("button", { name: "Create drop-off ticket" }),
+  ).toBeEnabled();
   const storage = await page.evaluate(() =>
     JSON.stringify({
       local: { ...localStorage },
       session: { ...sessionStorage },
     }),
   );
-  expect(storage).not.toContain("40.71451");
-  expect(storage).not.toContain("-73.96141");
-});
-
-test("permission denial preserves manual selection and ticket creation", async ({
-  page,
-}) => {
-  await page.addInitScript(() =>
-    Object.defineProperty(navigator, "geolocation", {
-      value: {
-        getCurrentPosition: (
-          _success: unknown,
-          error: (e: { code: number }) => void,
-        ) => error({ code: 1 }),
-      },
-      configurable: true,
-    }),
-  );
-  await dropoff(page);
-  await page
-    .getByRole("button", { name: "Use my location", exact: true })
-    .click();
-  await expect(page.locator(".location-status")).toContainText(
-    "permission was declined",
-  );
-  await page.getByLabel("Search centers").fill("Downtown");
-  await page
-    .getByRole("radio", { name: "Downtown Brooklyn Demo Center", exact: true })
-    .check();
-  await page.getByLabel("Plastic bottles", { exact: true }).fill("4");
-  await page.getByRole("button", { name: "Create drop-off ticket" }).click();
-  await expect(page.getByRole("dialog")).toContainText(
-    "Downtown Brooklyn Demo Center",
-  );
-});
-
-test("GPS timeout and unsupported browsers allow manual fallback", async ({
-  page,
-}) => {
-  await page.addInitScript(() =>
-    Object.defineProperty(navigator, "geolocation", {
-      value: {
-        getCurrentPosition: (
-          _success: unknown,
-          error: (e: { code: number }) => void,
-        ) => error({ code: 3 }),
-      },
-      configurable: true,
-    }),
-  );
-  await dropoff(page);
-  await page
-    .getByRole("button", { name: "Use my location", exact: true })
-    .click();
-  await expect(page.locator(".location-status")).toContainText("took too long");
-  await page.evaluate(() =>
-    Object.defineProperty(navigator, "geolocation", {
-      value: undefined,
-      configurable: true,
-    }),
-  );
-  await page
-    .getByRole("button", { name: "Use my location", exact: true })
-    .click();
-  await expect(page.locator(".location-status")).toContainText(
-    "Location is unavailable",
-  );
-  await expect(
-    page.getByRole("button", { name: "Create drop-off ticket" }),
-  ).toBeEnabled();
-});
-
-test("manual choice overrides a pending location request and can clear location", async ({
-  page,
-  context,
-}) => {
-  await context.grantPermissions(["geolocation"]);
-  await context.setGeolocation({ latitude: 40.71451, longitude: -73.96141 });
-  await dropoff(page);
-  await page
-    .getByRole("button", { name: "Use my location", exact: true })
-    .click();
-  await expect(
-    page.getByRole("radio", { name: "Williamsburg Demo Center", exact: true }),
-  ).toBeChecked();
+  expect(storage).not.toContain("40.7305");
   await page
     .getByRole("button", { name: "Clear location", exact: true })
     .click();
-  await expect(page.getByText("Nearest listed", { exact: true })).toHaveCount(
+  await expect(page.locator(".selected-center, .google-discovery")).toHaveCount(
     0,
   );
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, "geolocation", {
-      value: {
-        getCurrentPosition: (success: PositionCallback) => {
-          (window as unknown as { completeGPS: PositionCallback }).completeGPS =
-            success;
-        },
-      },
-      configurable: true,
-    });
-  });
-  await page
-    .getByRole("button", { name: "Use my location", exact: true })
-    .click();
   await expect(
     page.getByRole("button", { name: "Create drop-off ticket" }),
   ).toBeDisabled();
-  await page
-    .getByRole("radio", { name: "Downtown Brooklyn Demo Center", exact: true })
-    .check();
-  await page.evaluate(() => {
-    (
-      window as unknown as { completeGPS: (result: unknown) => void }
-    ).completeGPS({
-      coords: { latitude: 40.7305, longitude: -73.9544, accuracy: 10 },
-    });
-  });
-  await expect(
-    page.getByRole("radio", {
-      name: "Downtown Brooklyn Demo Center",
-      exact: true,
-    }),
-  ).toBeChecked();
-  await expect(
-    page.getByRole("button", { name: "Create drop-off ticket" }),
-  ).toBeEnabled();
 });
 
-test("far-away users are not told that sample centers are nearby", async ({
+test("a timed-out coarse position retries once with high accuracy", async ({
   page,
-  context,
 }) => {
-  await context.grantPermissions(["geolocation"]);
-  await context.setGeolocation({ latitude: 51.5074, longitude: -0.1278 });
+  await page.addInitScript(() => {
+    const options: PositionOptions[] = [];
+    (
+      window as unknown as { positionOptions: PositionOptions[] }
+    ).positionOptions = options;
+    navigator.geolocation.getCurrentPosition = (success, error, option) => {
+      options.push(option!);
+      if (options.length === 1) error!({ code: 3 } as GeolocationPositionError);
+      else
+        success({
+          coords: { latitude: 40.71451, longitude: -73.96141, accuracy: 20 },
+        } as GeolocationPosition);
+    };
+  });
   await dropoff(page);
   await page
     .getByRole("button", { name: "Use my location", exact: true })
     .click();
-  await expect(page.locator(".location-warning")).toContainText(
-    "There may not be a participating center near you yet",
-  );
-  await expect(page.locator(".location-demo")).toContainText(
-    "sample Brooklyn locations",
-  );
-  await expect(page.getByRole("link", { name: "Directions" })).toHaveCount(0);
-});
-
-test("centers without coordinates remain selectable and get no false distance", async ({
-  page,
-}) => {
-  await page.route("**/api/centers", async (route) =>
-    route.fulfill({
-      json: [
-        {
-          id: "greenpoint",
-          name: "Greenpoint Recycling Center",
-          address: "Location not yet registered",
-          latitude: null,
-          longitude: null,
-          is_demo: 0,
-        },
-      ],
-    }),
-  );
-  await page.addInitScript(() =>
-    Object.defineProperty(navigator, "geolocation", {
-      value: {
-        getCurrentPosition: (success: PositionCallback) =>
-          success({
-            coords: { latitude: 0, longitude: 0, accuracy: 50 },
-          } as GeolocationPosition),
-      },
-      configurable: true,
-    }),
-  );
-  await page.goto("/");
-  await page.getByRole("button", { name: "Try the recycler demo" }).click();
-  await expect(page.locator(".topbar")).toBeVisible();
-  const menu = page.getByRole("button", { name: "Open navigation" });
-  if (await menu.isVisible()) await menu.click();
-  await page
-    .locator("nav")
-    .getByRole("button", { name: "New drop-off", exact: true })
-    .click();
-  if (await menu.isVisible())
-    await expect(page.locator(".sidebar")).not.toBeVisible();
-  await page
-    .getByRole("button", { name: "Use my location", exact: true })
-    .click();
   await expect(page.locator(".location-status")).toContainText(
-    "do not have coordinates",
-  );
-  await expect(page.locator(".center-option")).toContainText(
-    "Distance unavailable",
+    "Location found",
   );
   await expect(
-    page.getByRole("radio", {
-      name: "Greenpoint Recycling Center",
-      exact: true,
-    }),
-  ).toBeChecked();
+    page.getByRole("button", { name: "Create drop-off ticket" }),
+  ).toBeDisabled();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { positionOptions: PositionOptions[] })
+          .positionOptions,
+    ),
+  ).toEqual([
+    { enableHighAccuracy: false, maximumAge: 0, timeout: 10000 },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
+  ]);
 });
 
 test("distance ranking handles zero, dateline, unknown positions, and safe directions", () => {
@@ -334,4 +215,109 @@ test("distance ranking handles zero, dateline, unknown positions, and safe direc
   expect(url.searchParams.get("destination")).toBe("0,0");
   expect(url.searchParams.has("origin")).toBe(false);
   expect(directionsUrl({ ...real, is_demo: 1 })).toBeNull();
+});
+
+test("imprecise success retries instead of showing incorrect nearby centers", async ({
+  page,
+}) => {
+  await mockGoogleMaps(page);
+  await page.addInitScript(() => {
+    let calls = 0;
+    navigator.geolocation.getCurrentPosition = (success) => {
+      calls++;
+      success({
+        coords:
+          calls === 1
+            ? { latitude: 40.8, longitude: -73.7, accuracy: 5000 }
+            : { latitude: 40.7305, longitude: -73.9544, accuracy: 20 },
+      } as GeolocationPosition);
+    };
+  });
+  await dropoff(page);
+  await page
+    .getByRole("button", { name: "Use my location", exact: true })
+    .click();
+  await expect(page.locator(".google-place-list li").first()).toContainText(
+    "Nearby public recycling",
+  );
+  const searches = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          googleSearches: {
+            locationBias: { center: { lat: number; lng: number } };
+          }[];
+        }
+      ).googleSearches,
+  );
+  expect(searches).toHaveLength(1);
+  expect(searches[0].locationBias.center).toEqual({
+    lat: 40.7305,
+    lng: -73.9544,
+  });
+});
+
+test("persistently inaccurate GPS leaves address search available and never searches the wrong area", async ({
+  page,
+}) => {
+  await mockGoogleMaps(page);
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = (success) =>
+      success({
+        coords: { latitude: 40.8, longitude: -73.7, accuracy: 5000 },
+      } as GeolocationPosition);
+  });
+  await dropoff(page);
+  await page
+    .getByRole("button", { name: "Use my location", exact: true })
+    .click();
+  await expect(page.locator(".location-status")).toContainText(
+    "too approximate",
+  );
+  await expect(page.locator(".google-discovery")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Create drop-off ticket" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByLabel("Or search by address, neighborhood, or postal code"),
+  ).toBeEnabled();
+});
+
+test("enrollment requires the exact branch and closed places are not reintroduced", () => {
+  const origin = { latitude: 40.72946, longitude: -73.815485 };
+  const center: Center = {
+    id: "ecoatm-kissena-blvd",
+    name: "ecoATM",
+    address: "71-04 Kissena Blvd",
+    ...origin,
+    is_demo: 0,
+    google_place_id: "kissena-place",
+  };
+  const other = {
+    id: "different-branch",
+    name: "ecoATM",
+    address: "Another street",
+    location: origin,
+    distance: 0,
+    attributions: [],
+  };
+  const results = mergeRegisteredPlaces([other], [center], origin, 10000);
+  expect(results).toHaveLength(2);
+  expect(
+    results.find((p) => p.id === "different-branch")?.registeredCenterId,
+  ).toBeUndefined();
+  expect(
+    results.find((p) => p.id === "kissena-place")?.registeredCenterId,
+  ).toBe("ecoatm-kissena-blvd");
+  expect(
+    mergeRegisteredPlaces([], [center], origin, 10000, ["kissena-place"]),
+  ).toHaveLength(0);
+  expect(
+    mergeRegisteredPlaces(
+      [{ ...other, id: "kissena-place" }],
+      [center],
+      origin,
+      10000,
+    ),
+  ).toHaveLength(1);
 });
