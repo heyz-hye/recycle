@@ -32,7 +32,7 @@ def remaining_fund(c):
         mint = get_settings().solana_usdc_mint
         received = total(
             c,
-            "SELECT SUM(amount_base_units) AS n FROM funding_deposits WHERE mint=?",
+            "SELECT SUM(d.amount_base_units) AS n FROM funding_deposits d WHERE d.mint=? AND NOT EXISTS (SELECT 1 FROM funding_inventory_receipts i WHERE i.signature=d.signature)",
             (mint,),
         )
         paid = total(

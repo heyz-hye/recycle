@@ -1101,10 +1101,10 @@ export default function Home() {
               {!demo ? (
                 <div className="stats-grid four">
                   <Stat
-                    label="Verified deposits"
+                    label="Released government funding"
                     value={`${((funding?.usdc?.received_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${fundingToken}`}
                     icon={<CircleDollarSign size={19} />}
-                    note="Finalized treasury deposits"
+                    note="Verified government deposits only"
                   />
                   <Stat
                     label="Available backing"
@@ -1212,8 +1212,21 @@ export default function Home() {
                   {!demo && (
                     <>
                       <p className="muted">
-                        Only verified {fundingToken} deposits fund LOOP. Earlier
-                        manually entered dollar amounts are excluded.
+                        Only released government funding backs LOOP. Operator
+                        test inventory and manually entered dollar amounts are
+                        excluded.
+                        {!!funding?.usdc?.inventory_usdc_base_units && (
+                          <>
+                            {" "}
+                            Test inventory:{" "}
+                            {(
+                              funding.usdc.inventory_usdc_base_units / 1e6
+                            ).toLocaleString(undefined, {
+                              maximumFractionDigits: 6,
+                            })}{" "}
+                            {fundingToken} (excluded from pricing).
+                          </>
+                        )}
                       </p>
                       {funding?.usdc?.deposits.map((d) => (
                         <div className="transaction-row" key={d.signature}>
@@ -1225,7 +1238,12 @@ export default function Home() {
                               )}{" "}
                               {fundingToken} received
                             </strong>
-                            <p>{date(d.created_at)}</p>
+                            <p>
+                              {date(d.created_at)} ·{" "}
+                              {d.is_inventory
+                                ? "Test inventory — not released funding"
+                                : "Released government funding"}
+                            </p>
                           </div>
                           <a
                             className="text-link"

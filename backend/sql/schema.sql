@@ -139,3 +139,8 @@ CREATE TABLE IF NOT EXISTS funding_deposits (
 CREATE TABLE IF NOT EXISTS conversion_quote_mints (
  quote_id TEXT PRIMARY KEY REFERENCES conversion_quotes(id), mint TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS funding_inventory_receipts (
+ signature TEXT PRIMARY KEY REFERENCES funding_deposits(signature),
+ reason TEXT NOT NULL, created_at BIGINT NOT NULL
+);

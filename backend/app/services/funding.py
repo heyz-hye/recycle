@@ -18,6 +18,15 @@ def record_deposit(c, actor_id, signature):
             "This receipt belongs to a different funding token.",
             409,
         )
+        require(
+            actor_id is None
+            or not c.one(
+                "SELECT signature FROM funding_inventory_receipts WHERE signature=?",
+                (signature,),
+            ),
+            "This receipt is test inventory, not released government funding.",
+            409,
+        )
         return existing
     try:
         receipt = chain().verify_usdc_deposit(signature)
@@ -39,7 +48,19 @@ def record_deposit(c, actor_id, signature):
             now(),
         ),
     )
-    fund_waiting(c)
+    if actor_id is None:
+        # Operator setup stock is not a government release. Keep its receipt
+        # for auditing without increasing LOOP backing or queuing rewards.
+        c.execute(
+            "INSERT INTO funding_inventory_receipts VALUES (?,?,?)",
+            (
+                signature,
+                "Operator test inventory; not released government funding",
+                now(),
+            ),
+        )
+    else:
+        fund_waiting(c)
     return c.one("SELECT * FROM funding_deposits WHERE signature=?", (signature,))
 
 
@@ -50,7 +71,12 @@ def summary(c):
     result = {
         "received_usdc_base_units": total(
             c,
-            "SELECT SUM(amount_base_units) AS n FROM funding_deposits WHERE mint=?",
+            "SELECT SUM(d.amount_base_units) AS n FROM funding_deposits d WHERE d.mint=? AND NOT EXISTS (SELECT 1 FROM funding_inventory_receipts i WHERE i.signature=d.signature)",
+            (get_settings().solana_usdc_mint,),
+        ),
+        "inventory_usdc_base_units": total(
+            c,
+            "SELECT SUM(d.amount_base_units) AS n FROM funding_deposits d JOIN funding_inventory_receipts i ON i.signature=d.signature WHERE d.mint=?",
             (get_settings().solana_usdc_mint,),
         ),
         "remaining_usdc_base_units": remaining_fund(c),
@@ -61,7 +87,7 @@ def summary(c):
         ),
         "distributed_loop_base_units": fund_snapshot(c)["supply_base_units"],
         "deposits": c.all(
-            "SELECT * FROM funding_deposits WHERE mint=? ORDER BY created_at DESC,signature LIMIT 100",
+            "SELECT d.*, CASE WHEN i.signature IS NULL THEN 0 ELSE 1 END AS is_inventory FROM funding_deposits d LEFT JOIN funding_inventory_receipts i ON i.signature=d.signature WHERE d.mint=? ORDER BY d.created_at DESC,d.signature LIMIT 100",
             (get_settings().solana_usdc_mint,),
         ),
         "mock_usdc": get_settings().mock_usdc_enabled,

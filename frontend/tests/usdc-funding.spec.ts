@@ -77,6 +77,7 @@ for (const mode of [
       blocked_rewards: [],
       usdc: {
         mock_usdc: mode === "mock",
+        inventory_usdc_base_units: mode === "mock" ? 10000000000 : 0,
         received_usdc_base_units: verified ? depositUnits : 0,
         remaining_usdc_base_units: verified ? depositUnits : 0,
         converted_usd_micros: 0,
@@ -177,6 +178,10 @@ for (const mode of [
       0,
     );
     await expect(page.getByLabel(`${tokenLabel} amount`)).toBeVisible();
+    if (mode === "mock")
+      await expect(
+        page.getByText(/Test inventory: 10,000 Mock USD/),
+      ).toBeVisible();
     if (mode === "mock")
       await expect(
         page.getByText(

@@ -334,3 +334,33 @@ def test_cannot_relabel_existing_usdc_balances_as_mock(client, monkeypatch):
         monkeypatch.setattr(get_settings(), "mock_usdc_enabled", True)
         with pytest.raises(ValueError, match="Cannot change the USDC mint"):
             seed(c)
+
+
+def test_operator_inventory_does_not_inflate_released_government_funding(
+    client, monkeypatch
+):
+    from fastapi import HTTPException
+
+    a, sig, result = receipt_adapter()
+    result["meta"]["postTokenBalances"][0]["uiTokenAmount"]["amount"] = "10000000000"
+    set_result(a, result)
+    monkeypatch.setattr("app.services.solana_client.chain", lambda: a)
+    monkeypatch.setattr(get_settings(), "app_mode", "devnet")
+    with transaction() as c:
+        funding.record_deposit(c, None, sig)
+        funding.record_deposit(c, None, sig)
+        assert assets.remaining_fund(c) == 0
+        snapshot = funding.summary(c)
+        assert snapshot["received_usdc_base_units"] == 0
+        assert snapshot["inventory_usdc_base_units"] == 10000000000
+        assert snapshot["deposits"][0]["is_inventory"] == 1
+        with pytest.raises(HTTPException, match="test inventory"):
+            funding.record_deposit(c, "partner", sig)
+        government_signature = str(Keypair().sign_message(b"government-release"))
+        result["transaction"]["signatures"] = [government_signature]
+        result["meta"]["postTokenBalances"][0]["uiTokenAmount"]["amount"] = "110000000"
+        funding.record_deposit(c, "partner", government_signature)
+        assert assets.remaining_fund(c) == 110000000
+        snapshot = funding.summary(c)
+        assert snapshot["received_usdc_base_units"] == 110000000
+        assert snapshot["inventory_usdc_base_units"] == 10000000000
