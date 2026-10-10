@@ -362,9 +362,35 @@ def test_existing_loop_inventory_limits_rewards_and_conversion_releases_stock(
         staff = c.one("SELECT * FROM users WHERE id='verifier'")
         confirm(c, claim["id"], staff, Confirmation(**APPROVE))
         assert c.one("SELECT state FROM rewards")["state"] == "awaiting_funding"
+        status = c.one("SELECT * FROM reward_funding_status")
+        assert status["code"] == "insufficient_loop"
+        assert "40.00 more LOOP" in status["message"]
+        # Dollar funding alone cannot resolve a token inventory shortage.
+        c.execute("UPDATE funding_account SET available_cents=available_cents+100")
+        fund_waiting(c)
+        assert c.one("SELECT state FROM rewards")["state"] == "awaiting_funding"
+        assert c.one("SELECT COUNT(*) AS n FROM reward_jobs")["n"] == 0
+    monkeypatch.setattr(get_settings(), "app_mode", "demo")
+    login(client)
+    assert (
+        client.get("/api/wallet").json()["rewards"][0]["funding_reason"]
+        == "insufficient_loop"
+    )
+    assert (
+        client.get(f"/api/claims/{claim['id']}").json()["reward"]["funding_message"]
+        == status["message"]
+    )
+    login(client, "partner")
+    assert (
+        client.get("/api/funding").json()["blocked_rewards"][0]["funding_reason"]
+        == "insufficient_loop"
+    )
+    monkeypatch.setattr(get_settings(), "app_mode", "devnet")
+    with transaction() as c:
         adapter.asset_balance.return_value = 10000
         fund_waiting(c)
         assert c.one("SELECT state FROM rewards")["state"] == "queued"
+        assert c.one("SELECT COUNT(*) AS n FROM reward_funding_status")["n"] == 0
         assert assets.loop_inventory_available(c) == 6000
     tick()
     tick()
@@ -410,3 +436,36 @@ def test_unconfirmed_ticket_cannot_create_or_process_a_reward(client):
     with transaction() as c:
         assert c.one("SELECT state FROM rewards")["state"] == "queued"
         assert c.one("SELECT needs_review FROM reward_jobs")["needs_review"] == 1
+
+
+def test_treasury_unavailable_is_distinct_from_insufficient_funding(
+    client, monkeypatch
+):
+    from unittest.mock import Mock
+    from app.services.rewards import fund_waiting
+
+    adapter = Mock()
+    adapter.asset_balance.side_effect = RuntimeError("private RPC details")
+    monkeypatch.setattr("app.services.solana_client.chain", lambda: adapter)
+    claim = submit(client)
+    opened(client, claim)
+    monkeypatch.setattr(get_settings(), "app_mode", "devnet")
+    from app.services.verification import confirm
+    from app.repositories.claims import get_claim
+    from app.schemas import Confirmation
+    from test_flow import APPROVE
+
+    with transaction() as c:
+        staff = c.one("SELECT * FROM users WHERE id='verifier'")
+        confirm(c, claim["id"], staff, Confirmation(**APPROVE))
+        reward = get_claim(c, claim["id"], staff)["reward"]
+    assert reward["funding_reason"] == "treasury_unavailable"
+    assert "private RPC details" not in reward["funding_message"]
+    with transaction() as c:
+        assert c.one("SELECT COUNT(*) AS n FROM reward_jobs")["n"] == 0
+        adapter.asset_balance.side_effect = None
+        adapter.asset_balance.return_value = 4000
+        fund_waiting(c)
+        fund_waiting(c)
+        assert c.one("SELECT COUNT(*) AS n FROM reward_jobs")["n"] == 1
+        assert c.one("SELECT COUNT(*) AS n FROM reward_funding_status")["n"] == 0

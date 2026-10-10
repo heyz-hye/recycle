@@ -27,6 +27,8 @@ export type Reward = {
   created_at: number;
   last_error?: string;
   needs_review?: number;
+  funding_reason?: string | null;
+  funding_message?: string | null;
 };
 export type Claim = {
   id: string;
@@ -79,6 +81,10 @@ export type Funding = {
   redeemed_cents: number;
   pending_reimbursement_cents: number;
   awaiting_funding: number;
+  blocked_rewards?: Pick<
+    Reward,
+    "id" | "amount_base_units" | "funding_reason" | "funding_message"
+  >[];
   ledger: {
     id: string;
     kind: string;

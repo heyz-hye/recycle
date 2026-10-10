@@ -83,11 +83,16 @@ const names: Record<Page, string> = {
   review: "Center workspace",
   funding: "Funding",
 };
-function Badge({ state }: { state: string }) {
+function Badge({ state, reason }: { state: string; reason?: string | null }) {
   const labels: Record<string, string> = {
     submitted: "Awaiting center",
     awaiting_review: "In review",
-    awaiting_funding: "Awaiting funding",
+    awaiting_funding:
+      reason === "insufficient_loop"
+        ? "Awaiting treasury LOOP"
+        : reason === "treasury_unavailable"
+          ? "Treasury unavailable"
+          : "Awaiting funding",
     verified: "Center confirmed",
     rejected: "Not accepted",
     queued: "Reward queued",
@@ -322,6 +327,9 @@ export default function Home() {
                   .map((i) => quantity(i, c.status === "verified"))
                   .join(" · ")}
               </span>
+              {c.reward?.funding_message && (
+                <small className="muted">{c.reward.funding_message}</small>
+              )}
               {c.verification?.reason && (
                 <small className="muted">{c.verification.reason}</small>
               )}
@@ -335,7 +343,10 @@ export default function Home() {
                   {tokens(c.reward.amount_base_units)} <small>LOOP</small>
                 </strong>
               )}
-              <Badge state={c.reward?.state || c.status} />
+              <Badge
+                state={c.reward?.state || c.status}
+                reason={c.reward?.funding_reason}
+              />
               {c.reward?.needs_review ? (
                 <small className="error-text">
                   Transaction needs staff review
@@ -948,8 +959,11 @@ export default function Home() {
                       <div>
                         <strong>Recycling reward</strong>
                         <p>{date(r.created_at)}</p>
+                        {r.funding_message && (
+                          <p className="muted">{r.funding_message}</p>
+                        )}
                       </div>
-                      <Badge state={r.state} />
+                      <Badge state={r.state} reason={r.funding_reason} />
                       <strong className="green">
                         +{tokens(r.amount_base_units)} LOOP
                       </strong>
@@ -1108,6 +1122,24 @@ export default function Home() {
                   note="Excluded from available funding"
                 />
               </div>
+              {!!funding?.blocked_rewards?.length && (
+                <section className="panel">
+                  <h2>Rewards waiting to be credited</h2>
+                  <p className="muted">
+                    USD funding and treasury LOOP are separate. Recording
+                    funding does not transfer LOOP into the treasury.
+                  </p>
+                  {funding.blocked_rewards.map((r) => (
+                    <div key={r.id}>
+                      <Badge
+                        state="awaiting_funding"
+                        reason={r.funding_reason}
+                      />
+                      <p>{r.funding_message}</p>
+                    </div>
+                  ))}
+                </section>
+              )}
               <div className="review-grid">
                 <FundingForm
                   busy={busy}
@@ -1116,7 +1148,7 @@ export default function Home() {
                     action(async () => {
                       setFunding(await api<Funding>("/funding", data));
                       setNotice(
-                        "Demo funding added. Eligible waiting rewards are now queued.",
+                        "Funding recorded. Rewards queue when both budget and treasury LOOP are available.",
                       );
                       await load();
                     })
@@ -1583,7 +1615,13 @@ function Review({
           {claim.reward && (
             <>
               <strong>{tokens(claim.reward.amount_base_units)} LOOP</strong>
-              <Badge state={claim.reward.state} />
+              <Badge
+                state={claim.reward.state}
+                reason={claim.reward.funding_reason}
+              />
+              {claim.reward.funding_message && (
+                <p className="muted">{claim.reward.funding_message}</p>
+              )}
             </>
           )}
         </div>
@@ -1770,7 +1808,8 @@ function FundingForm({
         <Clock3 size={18} />
         <span>
           {waiting} confirmed {waiting === 1 ? "claim is" : "claims are"}{" "}
-          waiting for funding. Available funds are reserved automatically.
+          waiting for funding or treasury LOOP. Rewards retry automatically when
+          both are available.
         </span>
       </div>
     </form>

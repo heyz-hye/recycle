@@ -124,3 +124,8 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 );
 CREATE INDEX IF NOT EXISTS conversions_owner ON conversions(user_id,created_at);
 CREATE INDEX IF NOT EXISTS withdrawals_owner ON withdrawals(user_id,created_at);
+
+CREATE TABLE IF NOT EXISTS reward_funding_status (
+ reward_id TEXT PRIMARY KEY REFERENCES rewards(id),
+ code TEXT NOT NULL, message TEXT NOT NULL, checked_at BIGINT NOT NULL
+);
