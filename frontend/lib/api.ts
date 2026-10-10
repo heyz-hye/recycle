@@ -117,6 +117,10 @@ export type Center = {
   is_demo: number;
   google_place_id?: string | null;
 };
+export type ChatReply = {
+  reply: string;
+  configured: boolean;
+};
 export class ApiError extends Error {
   constructor(
     message: string,

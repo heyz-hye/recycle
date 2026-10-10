@@ -90,6 +90,10 @@ CREATE TABLE IF NOT EXISTS recycling_events (
  material TEXT NOT NULL, quantity BIGINT NOT NULL, reward_base_units BIGINT NOT NULL, event_type TEXT NOT NULL,
  PRIMARY KEY(id, created_at)
 );
+CREATE TABLE IF NOT EXISTS chat_messages (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), created_at BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chat_rate ON chat_messages(user_id, created_at);
 CREATE INDEX IF NOT EXISTS claims_owner ON claims(user_id, created_at);
 CREATE INDEX IF NOT EXISTS claims_center ON claims(center_id, status);
 CREATE INDEX IF NOT EXISTS reward_state ON rewards(state, created_at);

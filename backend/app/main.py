@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from .config import get_settings
 from .db import initialize
-from .routes import auth, claims, dashboard, assets
+from .routes import auth, claims, dashboard, assets, chat
 
 
 async def demo_worker():
@@ -82,8 +82,9 @@ def health():
         "network": "simulated"
         if get_settings().app_mode == "demo"
         else "solana:devnet",
+        "assistant_enabled": bool(get_settings().gemini_api_key),
     }
 
 
-for router in (auth.router, claims.router, dashboard.router, assets.router):
+for router in (auth.router, claims.router, dashboard.router, assets.router, chat.router):
     app.include_router(router, prefix="/api")

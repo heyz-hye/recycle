@@ -142,7 +142,7 @@ def test_deposit_once_full_precision_and_no_loop_supply_change(client, monkeypat
         second = funding.record_deposit(c, "partner", sig)
         assert first == second
         assert assets.remaining_fund(c) == 20000001
-        assert assets.fund_snapshot(c)["supply_base_units"] == 0
+        assert assets.outstanding_loop(c) == 0
         assert c.one("SELECT COUNT(*) AS n FROM funding_deposits")["n"] == 1
         assert funding.summary(c)["received_usdc_base_units"] == 20000001
     a.rpc.get_transaction.assert_called_once()
@@ -231,7 +231,7 @@ def test_verified_pool_deducts_conversion_once_and_invalidates_old_quotes(
             c, user, ConversionInput(quote_id=q["id"], request_key="new-quote")
         )
         assert assets.remaining_fund(c) == 30000000
-        assert assets.fund_snapshot(c)["supply_base_units"] == 3000
+        assert assets.outstanding_loop(c) == 3000
 
 
 def test_prepare_deposit_requires_government_role_and_does_not_credit(

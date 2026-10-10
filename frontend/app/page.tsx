@@ -74,6 +74,7 @@ import { canShareReward } from "@/lib/sharing";
 import Scanner from "@/components/Scanner";
 import CenterPicker from "@/components/CenterPicker";
 import { AccountLogin, AccountDetails } from "@/components/Account";
+import Assistant from "@/components/Assistant";
 
 type Page = "overview" | "dropoff" | "wallet" | "impact" | "review" | "funding";
 const names: Record<Page, string> = {
@@ -151,6 +152,7 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [mode, setMode] = useState("");
   const [demoAccounts, setDemoAccounts] = useState(false);
+  const [assistantEnabled, setAssistantEnabled] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [ready, setReady] = useState(false);
   const [page, setPage] = useState<Page>("overview");
@@ -176,7 +178,11 @@ export default function Home() {
   const fundingToken = funding?.usdc?.mock_usdc ? "Mock USD" : "USDC";
   useEffect(() => {
     Promise.all([
-      api<{ mode: string; demo_accounts_enabled: boolean }>("/health"),
+      api<{
+        mode: string;
+        demo_accounts_enabled: boolean;
+        assistant_enabled: boolean;
+      }>("/health"),
       api<User>("/auth/me").catch((e) => {
         if (e instanceof ApiError && e.status === 401) return null;
         throw e;
@@ -185,6 +191,7 @@ export default function Home() {
       .then(([health, account]) => {
         setMode(health.mode);
         setDemoAccounts(health.demo_accounts_enabled);
+        setAssistantEnabled(health.assistant_enabled);
         setUser(account);
       })
       .catch((e) => setError(e.message))
@@ -1426,6 +1433,7 @@ export default function Home() {
           }}
         />
       )}
+      {assistantEnabled && user.role === "recycler" && <Assistant />}
     </div>
   );
 }

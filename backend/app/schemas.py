@@ -142,6 +142,60 @@ class RedemptionConfirm(StrictModel):
     signature: str = Field(min_length=64, max_length=100)
 
 
+CHAT_HISTORY_LIMIT = 18  # nine earlier exchanges, plus the new message
+CHAT_TOTAL_CHARS = 16000
+
+
+class ChatTurn(StrictModel):
+    role: Literal["user", "assistant"]
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class ChatInput(StrictModel):
+    message: str = Field(min_length=1, max_length=1000)
+    # Supplied by the browser, so untrusted: it only ever becomes plain text turns.
+    history: list[ChatTurn] = Field(default=[], max_length=CHAT_HISTORY_LIMIT)
+
+    @model_validator(mode="after")
+    def valid_conversation(self):
+        turns = [*self.history, ChatTurn(role="user", text=self.message)]
+        if any(not t.text.strip() for t in turns):
+            raise ValueError("Messages cannot be blank.")
+        if turns[0].role != "user":
+            raise ValueError("Conversation must start with a user message.")
+        if any(a.role == b.role for a, b in zip(turns, turns[1:])):
+            raise ValueError("Conversation roles must alternate.")
+        if sum(len(t.text) for t in turns) > CHAT_TOTAL_CHARS:
+            raise ValueError("Conversation is too long. Start a new chat.")
+        return self
+
+
+class NoArgs(StrictModel):
+    pass
+
+
+class PrepGuideArgs(StrictModel):
+    material: Literal["bottles", "cardboard"]
+
+
+class EstimateRewardArgs(StrictModel):
+    material: Literal["bottles", "cardboard"]
+    quantity: float = Field(gt=0, le=1000000)
+
+
+class ImpactPeriodArgs(StrictModel):
+    period: Literal["today", "week", "all"] = "week"
+
+
+class LoopValueArgs(StrictModel):
+    loop_amount: float = Field(
+        default=0,
+        ge=0,
+        le=10000000,
+        description="LOOP amount to preview; 0 means the user's available in-app LOOP.",
+    )
+
+
 class ConversionQuoteInput(StrictModel):
     loop_base_units: int = Field(gt=0, le=1000000000, strict=True)
     asset: Literal["USDC", "SOL"]
