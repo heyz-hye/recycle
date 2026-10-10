@@ -86,6 +86,12 @@ class TicketInput(StrictModel):
     ticket: str = Field(min_length=10, max_length=150)
 
 
+class FundingDepositInput(StrictModel):
+    signature: str = Field(
+        min_length=64, max_length=88, pattern=r"^[1-9A-HJ-NP-Za-km-z]+$"
+    )
+
+
 class FundingInput(StrictModel):
     amount_cents: int = Field(gt=0, le=10000000, strict=True)
     request_key: str = Field(min_length=8, max_length=100)

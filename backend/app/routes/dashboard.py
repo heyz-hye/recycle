@@ -2,7 +2,12 @@ from fastapi import APIRouter, Depends
 from ..auth import current_user, partner
 from ..db import transaction
 from ..config import get_settings
-from ..schemas import FundingInput, RedemptionInput, RedemptionConfirm
+from ..schemas import (
+    FundingInput,
+    FundingDepositInput,
+    RedemptionInput,
+    RedemptionConfirm,
+)
 from ..services.common import now, require
 from ..services.rewards import deposit
 from ..services import redemptions
@@ -100,7 +105,20 @@ def funding(user=Depends(partner)):
             "FROM rewards r JOIN reward_funding_status f ON f.reward_id=r.id "
             "WHERE r.state='awaiting_funding' ORDER BY r.created_at,r.id"
         )
+        if get_settings().app_mode == "devnet":
+            from ..services.funding import summary
+
+            result["usdc"] = summary(c)
         return result
+
+
+@router.post("/funding/deposits")
+def verify_funding_deposit(body: FundingDepositInput, user=Depends(partner)):
+    from ..services.funding import record_deposit
+
+    with transaction() as c:
+        record_deposit(c, user["id"], body.signature)
+    return funding(user)
 
 
 @router.post("/funding")

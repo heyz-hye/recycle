@@ -28,6 +28,9 @@ def remaining_fund(c):
         "SELECT received_cents,redeemed_cents FROM funding_account WHERE id='main'"
     )
     paid = total(c, "SELECT SUM(usd_micros) AS n FROM conversions")
+    if get_settings().app_mode == "devnet":
+        received = total(c, "SELECT SUM(amount_base_units) AS n FROM funding_deposits")
+        return max(0, received - paid - budget["redeemed_cents"] * 10000)
     return max(0, (budget["received_cents"] - budget["redeemed_cents"]) * 10000 - paid)
 
 
@@ -203,8 +206,7 @@ def quote(c, user, body):
         available >= output,
         f"The Devnet treasury needs {Decimal(output) / scale:f} {body.asset} for this conversion, "
         f"but only {Decimal(available) / scale:f} {body.asset} is available. "
-        f"Fund the treasury with Devnet {body.asset}, then try again. "
-        "Recording USD funding does not add tokens to the treasury.",
+        f"Fund the treasury with Devnet {body.asset}, then try again.",
         409,
     )
     row = dict(

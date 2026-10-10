@@ -359,6 +359,9 @@ def test_existing_loop_inventory_limits_rewards_and_conversion_releases_stock(
     opened(client, claim)
     monkeypatch.setattr(get_settings(), "app_mode", "devnet")
     with transaction() as c:
+        c.execute(
+            "INSERT INTO funding_deposits VALUES ('verified-test',500000000,'treasury','usdc',1,NULL,1)"
+        )
         staff = c.one("SELECT * FROM users WHERE id='verifier'")
         confirm(c, claim["id"], staff, Confirmation(**APPROVE))
         assert c.one("SELECT state FROM rewards")["state"] == "awaiting_funding"
@@ -456,6 +459,9 @@ def test_treasury_unavailable_is_distinct_from_insufficient_funding(
     from test_flow import APPROVE
 
     with transaction() as c:
+        c.execute(
+            "INSERT INTO funding_deposits VALUES ('verified-test',500000000,'treasury','usdc',1,NULL,1)"
+        )
         staff = c.one("SELECT * FROM users WHERE id='verifier'")
         confirm(c, claim["id"], staff, Confirmation(**APPROVE))
         reward = get_claim(c, claim["id"], staff)["reward"]

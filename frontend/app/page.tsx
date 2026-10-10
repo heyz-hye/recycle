@@ -1096,38 +1096,72 @@ export default function Home() {
                 title="Fuel the next good habit."
                 text="Keep rewards funded, traceable, and ready for the people making a difference."
               />
-              <div className="stats-grid four">
-                <Stat
-                  label="Available funding"
-                  value={dollars(funding?.available_cents || 0)}
-                  icon={<CircleDollarSign size={19} />}
-                  note="Available for new reservations"
-                />
-                <Stat
-                  label="Reserved"
-                  value={dollars(funding?.reserved_cents || 0)}
-                  icon={<Clock3 size={19} />}
-                  note="Committed to pending rewards"
-                />
-                <Stat
-                  label="Rewards issued"
-                  value={dollars(funding?.issued_cents || 0)}
-                  icon={<CheckCircle2 size={19} />}
-                  note="Confirmed reward allocation"
-                />
-                <Stat
-                  label="Pending reimbursement"
-                  value={dollars(funding?.pending_reimbursement_cents || 0)}
-                  icon={<RefreshCw size={19} />}
-                  note="Excluded from available funding"
-                />
-              </div>
+              {!demo ? (
+                <div className="stats-grid four">
+                  <Stat
+                    label="Verified deposits"
+                    value={`${((funding?.usdc?.received_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`}
+                    icon={<CircleDollarSign size={19} />}
+                    note="Finalized treasury deposits"
+                  />
+                  <Stat
+                    label="Available backing"
+                    value={`${((funding?.usdc?.remaining_usdc_base_units || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`}
+                    icon={<Wallet size={19} />}
+                    note="Deposits minus redeemed value"
+                  />
+                  <Stat
+                    label="Converted value"
+                    value={dollars(
+                      (funding?.usdc?.converted_usd_micros || 0) / 10000,
+                    )}
+                    icon={<CheckCircle2 size={19} />}
+                    note="Already allocated to conversions"
+                  />
+                  <Stat
+                    label="Outstanding LOOP"
+                    value={tokens(
+                      funding?.usdc?.distributed_loop_base_units || 0,
+                    )}
+                    icon={<RefreshCw size={19} />}
+                    note="Distributed and not redeemed"
+                  />
+                </div>
+              ) : (
+                <div className="stats-grid four">
+                  <Stat
+                    label="Available funding"
+                    value={dollars(funding?.available_cents || 0)}
+                    icon={<CircleDollarSign size={19} />}
+                    note="Available for new reservations"
+                  />
+                  <Stat
+                    label="Reserved"
+                    value={dollars(funding?.reserved_cents || 0)}
+                    icon={<Clock3 size={19} />}
+                    note="Committed to pending rewards"
+                  />
+                  <Stat
+                    label="Rewards issued"
+                    value={dollars(funding?.issued_cents || 0)}
+                    icon={<CheckCircle2 size={19} />}
+                    note="Confirmed reward allocation"
+                  />
+                  <Stat
+                    label="Pending reimbursement"
+                    value={dollars(funding?.pending_reimbursement_cents || 0)}
+                    icon={<RefreshCw size={19} />}
+                    note="Excluded from available funding"
+                  />
+                </div>
+              )}
               {!!funding?.blocked_rewards?.length && (
                 <section className="panel">
                   <h2>Rewards waiting to be credited</h2>
                   <p className="muted">
-                    USD funding and treasury LOOP are separate. Recording
-                    funding does not transfer LOOP into the treasury.
+                    USDC funds conversions. Treasury LOOP supplies ticket
+                    rewards. Both assets must be available for the corresponding
+                    payout.
                   </p>
                   {funding.blocked_rewards.map((r) => (
                     <div key={r.id}>
@@ -1141,47 +1175,100 @@ export default function Home() {
                 </section>
               )}
               <div className="review-grid">
-                <FundingForm
-                  busy={busy}
-                  waiting={funding?.awaiting_funding || 0}
-                  onFund={(data) =>
-                    action(async () => {
-                      setFunding(await api<Funding>("/funding", data));
-                      setNotice(
-                        "Funding recorded. Rewards queue when both budget and treasury LOOP are available.",
-                      );
-                      await load();
-                    })
-                  }
-                />
+                {!demo ? (
+                  <UsdcFundingForm
+                    busy={busy}
+                    details={funding?.usdc}
+                    onVerify={(signature) =>
+                      action(async () => {
+                        setFunding(
+                          await api<Funding>("/funding/deposits", {
+                            signature,
+                          }),
+                        );
+                        setNotice(
+                          "USDC deposit verified. Each transaction is counted only once.",
+                        );
+                        await load();
+                      })
+                    }
+                  />
+                ) : (
+                  <FundingForm
+                    busy={busy}
+                    waiting={funding?.awaiting_funding || 0}
+                    onFund={(data) =>
+                      action(async () => {
+                        setFunding(await api<Funding>("/funding", data));
+                        setNotice(
+                          "Funding recorded. Rewards queue when both budget and treasury LOOP are available.",
+                        );
+                        await load();
+                      })
+                    }
+                  />
+                )}
                 <section className="panel">
                   <div className="panel-heading">
                     <h2>Funding activity</h2>
-                    <span className="pill">Simulated funds</span>
+                    <span className="pill">
+                      {demo ? "Simulated funds" : "Devnet USDC"}
+                    </span>
                   </div>
-                  {funding?.ledger.map((l) => (
-                    <div className="transaction-row" key={l.id}>
-                      <span className="material-icon">
-                        <CircleDollarSign size={19} />
-                      </span>
-                      <div>
-                        <strong>
-                          {(
-                            {
-                              received: "Funding received",
-                              reserved: "Reward reserved",
-                              issued: "Reward issued",
-                              simulated_payout: "Simulated payout",
-                            } as Record<string, string>
-                          )[l.kind] || l.kind}
+                  {!demo && (
+                    <>
+                      <p className="muted">
+                        Only verified USDC deposits fund LOOP. Earlier manually
+                        entered dollar amounts are excluded.
+                      </p>
+                      {funding?.usdc?.deposits.map((d) => (
+                        <div className="transaction-row" key={d.signature}>
+                          <div>
+                            <strong>
+                              {(d.amount_base_units / 1e6).toLocaleString(
+                                undefined,
+                                { maximumFractionDigits: 6 },
+                              )}{" "}
+                              USDC received
+                            </strong>
+                            <p>{date(d.created_at)}</p>
+                          </div>
+                          <a
+                            className="text-link"
+                            href={explorer(d.signature)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View deposit <ExternalLink size={16} />
+                          </a>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {demo &&
+                    funding?.ledger.map((l) => (
+                      <div className="transaction-row" key={l.id}>
+                        <span className="material-icon">
+                          <CircleDollarSign size={19} />
+                        </span>
+                        <div>
+                          <strong>
+                            {(
+                              {
+                                received: "Funding received",
+                                reserved: "Reward reserved",
+                                issued: "Reward issued",
+                                simulated_payout: "Simulated payout",
+                              } as Record<string, string>
+                            )[l.kind] || l.kind}
+                          </strong>
+                          <p>{date(l.created_at)}</p>
+                        </div>
+                        <strong className="push-right">
+                          {dollars(l.amount_cents)}
                         </strong>
-                        <p>{date(l.created_at)}</p>
                       </div>
-                      <strong className="push-right">
-                        {dollars(l.amount_cents)}
-                      </strong>
-                    </div>
-                  ))}
+                    ))}
                 </section>
               </div>
             </>
@@ -1755,6 +1842,77 @@ function Review({
     </Modal>
   );
 }
+function UsdcFundingForm({
+  busy,
+  details,
+  onVerify,
+}: {
+  busy: boolean;
+  details: Funding["usdc"];
+  onVerify: (signature: string) => Promise<boolean>;
+}) {
+  const [signature, setSignature] = useState("");
+  return (
+    <form
+      className="panel form-panel"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (await onVerify(signature.trim())) setSignature("");
+      }}
+    >
+      <h2>Deposit USDC funding</h2>
+      <p className="muted">
+        Send USDC from your government funding wallet to this treasury, then
+        verify the transaction below. This environment uses Solana Devnet test
+        USDC.
+      </p>
+      <label>Treasury wallet</label>
+      <p style={{ overflowWrap: "anywhere" }}>
+        {details?.treasury_address || "Treasury unavailable. Try refreshing."}
+      </p>
+      {details?.treasury_address && (
+        <button
+          type="button"
+          className="button secondary"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(details.treasury_address!);
+            } catch {
+              /* The address remains selectable. */
+            }
+          }}
+        >
+          Copy treasury address
+        </button>
+      )}
+      <label>USDC mint · Solana Devnet</label>
+      <p className="muted" style={{ overflowWrap: "anywhere" }}>
+        {details?.usdc_mint}
+      </p>
+      <label htmlFor="deposit-signature">Deposit transaction signature</label>
+      <input
+        id="deposit-signature"
+        required
+        minLength={64}
+        maxLength={88}
+        value={signature}
+        onChange={(e) => setSignature(e.target.value)}
+        placeholder="Paste the signature from your wallet"
+      />
+      <button
+        className="button primary full"
+        disabled={busy || !details?.treasury_address}
+      >
+        {busy ? "Verifying deposit…" : "Verify USDC deposit"}
+      </button>
+      <p className="muted">
+        The amount comes from the finalized transaction. One USDC provides $1 of
+        funding for LOOP valuation. The same deposit cannot be counted twice.
+      </p>
+    </form>
+  );
+}
+
 function FundingForm({
   busy,
   waiting,

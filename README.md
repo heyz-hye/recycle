@@ -85,7 +85,9 @@ Use different databases for demo and Devnet. The database records its mode and r
 
 Use your existing LOOP mint and fund a dedicated server treasury with LOOP, Devnet SOL, and test USDC. Ticket confirmation credits the recycler's platform balance; wallet withdrawals transfer existing tokens without minting new LOOP. Users link their wallet with a signed ownership challenge.
 
-LOOP conversion value is **remaining recorded fund ÷ distributed, unredeemed LOOP**, excluding unallocated treasury inventory. Users can convert their platform LOOP to USDC/SOL and withdraw either asset. See [wallet setup, pricing, migrations, and recovery](docs/WALLETS_AND_CONVERSIONS.md) for configuration and test limits.
+LOOP conversion value is **remaining verified USDC funding ÷ distributed, unredeemed LOOP**, excluding unallocated treasury inventory. Users can convert their platform LOOP to USDC/SOL and withdraw either asset. See [wallet setup, pricing, migrations, and recovery](docs/WALLETS_AND_CONVERSIONS.md) for configuration and test limits.
+
+Government fund managers send USDC directly to the treasury, then enter the transaction signature in **Funding → Verify USDC deposit**. Finalized receipts are checked for the configured USDC mint, treasury recipient, successful execution, and positive net incoming amount. Each signature is counted once. One USDC supplies $1 of accounting backing; existing manually entered dollar entries are excluded in Devnet. No payment provider is involved. SOL conversion still needs separately stocked Devnet SOL; this flow does not swap USDC on a DEX.
 
 Use a separate PostgreSQL database/schema with `APP_MODE=devnet`, `DEMO_ACCOUNTS_ENABLED=false`, and server-only treasury keypair access. Configure centers and staff/fund-manager accounts using [the account guide](docs/ACCOUNTS_AND_TIGER_DATA.md). `./scripts/dev.sh` starts the worker automatically in Devnet mode. For separate service deployments, run the worker alongside the API:
 

@@ -74,6 +74,19 @@ export type Impact = {
   daily: { day: number; bottles: number; cardboard_grams: number }[];
 };
 export type Funding = {
+  usdc?: {
+    received_usdc_base_units: number;
+    remaining_usdc_base_units: number;
+    converted_usd_micros: number;
+    distributed_loop_base_units: number;
+    treasury_address: string | null;
+    usdc_mint: string;
+    deposits: {
+      signature: string;
+      amount_base_units: number;
+      created_at: number;
+    }[];
+  };
   received_cents: number;
   available_cents: number;
   reserved_cents: number;

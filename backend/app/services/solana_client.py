@@ -128,6 +128,86 @@ class SolanaChain:
             return 0
         return int(self.rpc.get_token_account_balance(account).value.amount)
 
+    def verify_usdc_deposit(self, signature):
+        try:
+            sig = Signature.from_string(signature)
+        except ValueError:
+            raise ValueError("Enter a valid Solana transaction signature.") from None
+        mint = str(self.usdc_mint())
+        treasury = str(self.issuer.pubkey())
+        account = str(
+            get_associated_token_address(self.issuer.pubkey(), Pubkey.from_string(mint))
+        )
+        response = self.rpc.get_transaction(
+            sig,
+            encoding="jsonParsed",
+            commitment="finalized",
+            max_supported_transaction_version=0,
+        )
+        result = json.loads(response.to_json())["result"]
+        if result is None:
+            raise ValueError(
+                "Deposit not finalized on Devnet yet. Wait a moment and retry."
+            )
+        meta = result.get("meta")
+        if not meta or meta.get("err") is not None:
+            raise ValueError("This transaction failed and cannot fund the pool.")
+        transaction = result["transaction"]
+        if (
+            not transaction.get("signatures")
+            or transaction["signatures"][0] != signature
+        ):
+            raise ValueError("The transaction signature does not match.")
+        keys = transaction["message"]["accountKeys"]
+        addresses = [k["pubkey"] for k in keys]
+        if account not in addresses:
+            raise ValueError(
+                "This transaction did not deposit USDC into this treasury."
+            )
+        index = addresses.index(account)
+
+        def amount(rows):
+            matches = [r for r in rows if r["accountIndex"] == index]
+            if not matches:
+                return 0
+            row = matches[0]
+            if (
+                row["mint"] != mint
+                or row.get("owner") != treasury
+                or row["uiTokenAmount"]["decimals"] != 6
+            ):
+                raise ValueError(
+                    "Deposit token or recipient does not match the USDC treasury."
+                )
+            return int(row["uiTokenAmount"]["amount"])
+
+        received = amount(meta.get("postTokenBalances", [])) - amount(
+            meta.get("preTokenBalances", [])
+        )
+
+        # A transfer between treasury-owned token accounts is not new funding.
+        def owned_total(rows):
+            return sum(
+                int(r["uiTokenAmount"]["amount"])
+                for r in rows
+                if r.get("owner") == treasury and r["mint"] == mint
+            )
+
+        net = owned_total(meta.get("postTokenBalances", [])) - owned_total(
+            meta.get("preTokenBalances", [])
+        )
+        received = min(received, net)
+        if not 0 < received <= 9000000000000000:
+            raise ValueError(
+                "This transaction has no new USDC funding for the treasury."
+            )
+        return {
+            "amount_base_units": received,
+            "treasury": treasury,
+            "mint": mint,
+            "slot": result["slot"],
+        }
+
     def check_payout(self, asset, amount):
         reserve = get_settings().treasury_fee_reserve_lamports
         if self.rpc.get_balance(self.issuer.pubkey()).value < reserve + (
