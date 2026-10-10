@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./chat.css";
+import RecyclingChat from "@/components/RecyclingChat";
 export const metadata: Metadata = {
   title: "LoopMint — Small steps. Full circle.",
   description:
@@ -10,7 +12,11 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      {/* Browser extensions such as Grammarly inject body attributes before hydration. */}
+      <body suppressHydrationWarning>
+        {children}
+        <RecyclingChat />
+      </body>
     </html>
   );
 }

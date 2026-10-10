@@ -1,6 +1,10 @@
 # LoopMint
 
-A recycling rewards MVP with a Next.js interface and Python/FastAPI backend. Recycling center staff confirm physical intake; the backend calculates funded token rewards from their measured quantities. No Gemini, AI verification, hosted posts, or community feed.
+A recycling rewards MVP with a Next.js interface and Python/FastAPI backend. Recycling center staff confirm physical intake; the backend calculates funded token rewards from their measured quantities. Ask Loop is a Gemini-powered recycling support chat; physical intake verification remains with center staff.
+
+## Recycling support chat
+
+Click **Ask Loop** on any page for practical recycling advice and LoopMint help. Replies are conversational and normally 60–140 words, with follow-up context within the current session. Configure `GEMINI_API_KEY` in the root `.env` and restart the backend; `GEMINI_MODEL` optionally overrides `gemini-3.8-flash`. The key stays on the Python server. Chat messages are sent to Google's Gemini API and are not stored in LoopMint's database or browser storage. Reloading clears the conversation. The guide has no live local search or account access and asks users to confirm local recycling rules. It includes bounded history, timeouts, retry controls and a per-process request limit; deployments with multiple workers should add a shared gateway limit.
 
 ## Run the local demo
 

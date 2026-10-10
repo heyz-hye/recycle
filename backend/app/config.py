@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     timescale_enabled: bool = False
     google_maps_browser_key: str = ""
     google_maps_map_id: str = "DEMO_MAP_ID"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.8-flash"
     ticket_ttl_seconds: int = 1800
     solana_rpc_url: str = "https://api.devnet.solana.com"
     solana_mint: str = ""
