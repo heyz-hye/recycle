@@ -4,6 +4,7 @@ from fastapi import Request, Response, Depends
 from .db import transaction
 from .config import get_settings
 from .services.common import now, require
+from .services.accounts import account
 
 COOKIE = "loopmint_session"
 
@@ -32,11 +33,18 @@ def set_session(c, response: Response, user_id):
 def current_user(request: Request):
     token = request.cookies.get(COOKIE, "")
     with transaction(write=False) as c:
-        user = c.one(
-            "SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?",
+        session = c.one(
+            "SELECT user_id FROM sessions WHERE token_hash=? AND expires_at>?",
             (digest(token), now()),
         )
+        user = account(c, session["user_id"]) if session else None
     require(user, "Please sign in to continue.", 401)
+    require(
+        not user["wallet"].startswith("demo:")
+        or (get_settings().app_mode == "demo" and get_settings().demo_accounts_enabled),
+        "Demo accounts are disabled. Sign in to your individual account.",
+        401,
+    )
     return user
 
 

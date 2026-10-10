@@ -13,21 +13,19 @@ def seed(c):
         "INSERT INTO app_metadata VALUES ('mode', ?) ON CONFLICT DO NOTHING", (mode,)
     )
     c.execute(
-        "INSERT INTO centers VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
-        (
-            "greenpoint",
-            "Greenpoint Recycling Center",
-            "Greenpoint, Brooklyn · Mon–Sat, 9am–5pm",
-        ),
-    )
-    c.execute(
         "INSERT INTO reward_rules VALUES ('bottles','count',500,1) ON CONFLICT DO NOTHING"
     )
     c.execute(
         "INSERT INTO reward_rules VALUES ('cardboard','grams',2000,1000) ON CONFLICT DO NOTHING"
     )
     c.execute("INSERT INTO funding_account (id) VALUES ('main') ON CONFLICT DO NOTHING")
-    if get_settings().app_mode != "demo":
+    # Existing Devnet rewards were delivered directly to wallets. Never credit
+    # them to the new withdrawable platform balance a second time.
+    c.execute(
+        "INSERT INTO reward_custody (reward_id,delivery) SELECT id,? FROM rewards WHERE 1=1 ON CONFLICT DO NOTHING",
+        ("internal" if mode == "demo" else "external",),
+    )
+    if mode != "demo" or not get_settings().demo_accounts_enabled:
         return
     # Example neighborhood coordinates, not verified public drop-off facilities.
     # Never seed these locations into a Devnet/production database.

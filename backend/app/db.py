@@ -29,7 +29,7 @@ def transaction(write=True):
         import psycopg
         from psycopg.rows import dict_row
 
-        raw = psycopg.connect(url, row_factory=dict_row)
+        raw = psycopg.connect(url, row_factory=dict_row, connect_timeout=10)
     else:
         path = url.removeprefix("sqlite:///")
         Path(path).parent.mkdir(parents=True, exist_ok=True)

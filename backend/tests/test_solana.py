@@ -20,8 +20,9 @@ def adapter():
     return a
 
 
-def test_mint_transaction_signed_and_distinct_per_reward():
+def test_reward_transaction_transfers_treasury_stock_and_is_distinct():
     a = adapter()
+    a.check_payout = Mock()
     wallet = str(Keypair().pubkey())
     first = a.prepare({"id": "claim-one", "amount_base_units": 4000}, wallet)
     second = a.prepare({"id": "claim-two", "amount_base_units": 4000}, wallet)
@@ -29,10 +30,12 @@ def test_mint_transaction_signed_and_distinct_per_reward():
     tx = Transaction.from_bytes(base64.b64decode(first["transaction_b64"]))
     tx.verify()
     assert len(tx.message.instructions) == 3
-    assert tx.message.instructions[1].data[0] == 14  # SPL MintToChecked
+    assert (
+        tx.message.instructions[1].data[0] == 12
+    )  # SPL TransferChecked; rewards never mint
     assert int.from_bytes(tx.message.instructions[1].data[1:9], "little") == 4000
     assert tx.message.instructions[1].data[9] == 2
-    assert tx.message.instructions[2].data == b"LoopMint reward:claim-one"
+    assert tx.message.instructions[2].data == b"LoopMint withdrawal:reward:claim-one"
 
 
 def signed_burn(a, owner, redemption="redemption-one"):
@@ -118,3 +121,75 @@ def test_other_network_is_rejected_before_reading_keypair(monkeypatch):
     monkeypatch.setattr("app.services.solana_client.Client", lambda *a, **k: fake)
     with pytest.raises(RuntimeError, match="Only Solana Devnet"):
         SolanaChain()
+
+
+@pytest.mark.parametrize(
+    "asset,amount", [("LOOP", 1234), ("USDC", 1234567), ("SOL", 123456789)]
+)
+def test_signed_withdrawal_uses_exact_asset_amount_and_destination(asset, amount):
+    from spl.token.instructions import get_associated_token_address
+
+    a = adapter()
+    owner = Keypair().pubkey()
+    a.check_payout = Mock()
+    mint = Keypair().pubkey()
+    a.usdc_mint = lambda: mint
+    row = {
+        "id": "withdrawal-one",
+        "asset": asset,
+        "amount_base_units": amount,
+        "destination": str(owner),
+    }
+    result = a.prepare_withdrawal(row)
+    tx = Transaction.from_bytes(base64.b64decode(result["transaction_b64"]))
+    tx.verify()
+    keys = tx.message.account_keys
+    if asset == "SOL":
+        ix = tx.message.instructions[0]
+        assert int.from_bytes(ix.data[:4], "little") == 2
+        assert int.from_bytes(ix.data[4:12], "little") == amount
+        assert keys[ix.accounts[1]] == owner
+    else:
+        ix = tx.message.instructions[1]
+        assert ix.data[0] == 12  # TransferChecked, never MintTo
+        assert int.from_bytes(ix.data[1:9], "little") == amount
+        assert ix.data[9] == (2 if asset == "LOOP" else 6)
+        assert (
+            get_associated_token_address(owner, a.mint if asset == "LOOP" else mint)
+            in keys
+        )
+    assert b"withdrawal" in tx.message.instructions[-1].data
+    assert (
+        result["signature"]
+        != a.prepare_withdrawal({**row, "id": "withdrawal-two"})["signature"]
+    )
+
+
+def test_existing_nine_decimal_loop_is_transferred_from_treasury():
+    from spl.token.instructions import get_associated_token_address
+
+    a = adapter()
+    a.loop_decimals = 9
+    a.check_payout = Mock()
+    owner = Keypair().pubkey()
+    row = dict(
+        id="existing-loop", asset="LOOP", amount_base_units=125, destination=str(owner)
+    )
+    tx = Transaction.from_bytes(
+        base64.b64decode(a.prepare_withdrawal(row)["transaction_b64"])
+    )
+    tx.verify()
+    ix = tx.message.instructions[1]
+    keys = tx.message.account_keys
+    assert ix.data[0] == 12  # TransferChecked: no mint authority needed.
+    assert int.from_bytes(ix.data[1:9], "little") == 1250000000
+    assert ix.data[9] == 9
+    assert keys[ix.accounts[0]] == get_associated_token_address(
+        a.issuer.pubkey(), a.mint
+    )
+    assert keys[ix.accounts[1]] == a.mint
+    assert keys[ix.accounts[2]] == get_associated_token_address(owner, a.mint)
+    a.rpc.get_token_account_balance.return_value = SimpleNamespace(
+        value=SimpleNamespace(amount="100000000000")
+    )
+    assert a.asset_balance("LOOP") == 10000  # 100 LOOP in app accounting units.

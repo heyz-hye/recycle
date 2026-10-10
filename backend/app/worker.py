@@ -3,13 +3,14 @@ import time
 from .db import transaction, initialize
 from .services.solana_client import chain, DemoChain
 from .services.common import now, uid, event
-from .services.rewards import fund_waiting
+from .services.rewards import fund_waiting, has_confirmed_ticket
 
 log = logging.getLogger(__name__)
 
 
 def tick(adapter=None):
-    adapter = adapter or chain()
+    from .config import get_settings
+
     with transaction() as c:
         fund_waiting(c)
         ids = c.all(
@@ -27,8 +28,27 @@ def tick(adapter=None):
                 )
                 if reward["state"] == "confirmed" or job["needs_review"]:
                     continue
+                if not has_confirmed_ticket(c, reward["claim_id"], reward["user_id"]):
+                    c.execute(
+                        "UPDATE reward_jobs SET needs_review=1,last_error=? WHERE reward_id=?",
+                        (
+                            "Reward blocked: the ticket has no valid center confirmation.",
+                            reward_id,
+                        ),
+                    )
+                    continue
+                custody = c.one(
+                    "SELECT delivery FROM reward_custody WHERE reward_id=?",
+                    (reward_id,),
+                )
+                internal = custody and custody["delivery"] == "internal"
+                effective = adapter or (
+                    DemoChain("demo" if get_settings().app_mode == "demo" else "credit")
+                    if internal
+                    else chain()
+                )
                 if not job["signature"]:
-                    prepared = adapter.prepare(reward, reward["wallet"])
+                    prepared = effective.prepare(reward, reward["wallet"])
                     c.execute(
                         "UPDATE reward_jobs SET transaction_b64=?,signature=?,last_valid_block_height=? WHERE reward_id=?",
                         (
@@ -44,7 +64,7 @@ def tick(adapter=None):
                     )
                     job.update(prepared)
             # This runs only after the signed transaction has committed.
-            state = adapter.status(job)
+            state = effective.status(job)
             if state == "confirmed":
                 with transaction() as c:
                     changed = c.execute(
@@ -90,7 +110,7 @@ def tick(adapter=None):
                         ),
                     )
             elif state == "missing":
-                adapter.broadcast(job["transaction_b64"])
+                effective.broadcast(job["transaction_b64"])
                 with transaction() as c:
                     c.execute(
                         "UPDATE reward_jobs SET attempts=attempts+1,last_error=NULL WHERE reward_id=?",
@@ -110,10 +130,13 @@ def tick(adapter=None):
                         reward_id,
                     ),
                 )
-    if not isinstance(adapter, DemoChain):
+    from .services.assets import process_withdrawals
+
+    process_withdrawals()
+    if get_settings().app_mode != "demo" and get_settings().solana_mint:
         from .services.redemptions import reconcile_pending
 
-        reconcile_pending(adapter)
+        reconcile_pending(adapter or chain())
 
 
 def main():

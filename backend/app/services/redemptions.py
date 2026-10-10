@@ -6,15 +6,9 @@ from ..db import transaction
 
 
 def balance(c, user_id):
-    earned = c.one(
-        "SELECT COALESCE(SUM(amount_base_units),0) AS n FROM rewards WHERE user_id=? AND state='confirmed'",
-        (user_id,),
-    )["n"]
-    committed = c.one(
-        "SELECT COALESCE(SUM(amount_base_units),0) AS n FROM redemptions WHERE user_id=?",
-        (user_id,),
-    )["n"]
-    return earned - committed
+    from .assets import balances
+
+    return balances(c, user_id)["LOOP"]["available_base_units"]
 
 
 def complete(c, row):
@@ -41,6 +35,11 @@ def complete(c, row):
 
 
 def create(c, user, body):
+    require(
+        get_settings().app_mode == "demo",
+        "Use conversion and withdrawal for platform balances. Legacy burns are disabled.",
+        409,
+    )
     key = f"{user['id']}:{body.request_key}"
     previous = c.one("SELECT * FROM redemptions WHERE request_key=?", (key,))
     if previous:
