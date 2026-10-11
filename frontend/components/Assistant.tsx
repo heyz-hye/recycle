@@ -169,7 +169,7 @@ export default function Assistant() {
           <div className="assistant-heading">
             <div>
               <strong>LoopMint Assistant</strong>
-              <span>Recycling questions, answered</span>
+              <span>Recycle. Earn. Repeat.</span>
             </div>
             <div className="assistant-heading-actions">
               <button

@@ -192,7 +192,7 @@ class LoopValueArgs(StrictModel):
         default=0,
         ge=0,
         le=10000000,
-        description="LOOP amount to preview; 0 means the user's available in-app LOOP.",
+        description="LOOP amount to preview; 0 returns only the rate.",
     )
 
 
