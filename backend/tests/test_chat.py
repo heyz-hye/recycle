@@ -161,7 +161,26 @@ def test_get_my_rewards_explains_waiting_for_funding_in_plain_words(client):
         reward = assistant.get_my_rewards(c, user, NoArgs())["rewards"][0]
     assert reward["state"] == "awaiting_funding"
     assert "released government funding" in reward["waiting_reason"]
-    assert reward["funding_details"]
+    assert "funding_details" not in reward
+
+
+def test_waiting_reward_hides_treasury_loop_totals(client):
+    with transaction() as c:
+        user = c.one("SELECT * FROM users WHERE wallet='demo:recycler'")
+        reward_id = insert_reward(c, user, "awaiting_funding", None, "internal")
+        c.execute(
+            "INSERT INTO reward_funding_status (reward_id,code,message,checked_at) "
+            "VALUES (?,?,?,?)",
+            (
+                reward_id,
+                "insufficient_loop",
+                "The treasury has 4,587.28 LOOP available and needs 12.34 more LOOP.",
+                now(),
+            ),
+        )
+        reward = assistant.get_my_rewards(c, user, NoArgs())["rewards"][0]
+    assert "treasury" in reward["waiting_reason"]
+    assert "4,587.28" not in str(reward) and "12.34" not in str(reward)
 
 
 def test_get_my_rewards_hides_internal_error_text(client):
@@ -538,12 +557,12 @@ def test_get_loop_value_previews_rate_without_writing_a_quote(client, monkeypatc
     # $500 seeded demo funding / 40 earned LOOP = $12.50 per LOOP.
     assert mine["is_preview"] is True
     assert mine["value_per_loop"] == 12.5
-    assert mine["preview"] == {
-        "loop": 40,
-        "estimated_received": 500,
+    assert "preview" not in mine  # no amount asked: the rate only
+    assert ten["preview"] == {
+        "loop": 10,
+        "estimated_received": 125,
         "exceeds_your_available_loop": False,
     }
-    assert ten["preview"]["estimated_received"] == 125
     assert too_much["preview"]["exceeds_your_available_loop"] is True
     assert "no real-world monetary value" in mine["note"]
     assert quotes == 0
@@ -557,6 +576,7 @@ def test_get_loop_value_unavailable_without_earned_loop(client, monkeypatch):
         result = assistant.get_loop_value(c, user, LoopValueArgs())
     assert result["rate_available"] is False
     assert "preview" not in result
+    assert "funding" not in result["note"] and "earned" not in result["note"]
 
 
 def test_get_loop_value_uses_mock_usd_funding_on_devnet(client, monkeypatch):
@@ -581,11 +601,48 @@ def test_get_loop_value_uses_mock_usd_funding_on_devnet(client, monkeypatch):
                     "INSERT INTO funding_inventory_receipts VALUES (?,?,?)",
                     (signature, "test", now()),
                 )
-        result = assistant.get_loop_value(c, user, LoopValueArgs())
+        result = assistant.get_loop_value(c, user, LoopValueArgs(loop_amount=5))
     assert result["asset"] == "Mock USD"
-    assert result["remaining_released_funding"] == 20
     assert result["value_per_loop"] == 4  # 20 Mock USD / 5 earned LOOP
     assert result["preview"]["estimated_received"] == 20
+
+
+@pytest.mark.parametrize("loop_amount", [0, 7])
+def test_get_loop_value_never_reveals_funding_or_supply_totals(
+    client, monkeypatch, loop_amount
+):
+    no_sol_price(monkeypatch)
+    login(client)
+    with transaction() as c:
+        user = c.one("SELECT * FROM users WHERE wallet='demo:recycler'")
+        # 3 earned LOOP against the seeded 500 funding: totals the result must not show.
+        insert_reward(c, user, "confirmed", "credit:" + uid(), "internal")
+        c.execute("UPDATE rewards SET amount_base_units=300")
+        snapshot = assets.fund_snapshot(c)
+        result = assistant.get_loop_value(c, user, LoopValueArgs(loop_amount=loop_amount))
+    fund = snapshot["fund_usd_micros"] / 1000000
+    supply = snapshot["supply_base_units"] / 100
+    assert fund and supply
+    allowed = {"is_preview", "asset", "rate_available", "value_per_loop", "note"}
+    assert set(result) == allowed | ({"preview"} if loop_amount else set())
+    if loop_amount:
+        assert set(result["preview"]) == {
+            "loop", "estimated_received", "exceeds_your_available_loop"
+        }
+    numbers = []
+
+    def collect(value):
+        if isinstance(value, dict):
+            for v in value.values():
+                collect(v)
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            numbers.append(value)
+
+    collect(result)
+    text = str(result)
+    for total in (fund, supply):
+        assert total not in numbers
+        assert f"{total:,.2f}" not in text and f"{total:g}" not in result["note"]
 
 
 # --- conversation history -------------------------------------------------
@@ -748,5 +805,10 @@ def test_system_instruction_covers_safety_scope_and_secrets(client, monkeypatch,
         "pizza boxes",
         "always use the tools",
         "only bottles and cardboard earn loop",
+        "never use latex",
+        "\\frac",
+        "never state or estimate funding",
+        "explain it in words only",
     ]:
         assert rule in text, rule
+    assert "divided by" not in text
